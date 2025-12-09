@@ -1,122 +1,2114 @@
-import 'package:flutter/material.dart';
+import "package:flutter/material.dart";
+import "package:flutter/services.dart";
+import "package:just_audio/just_audio.dart";
+import "package:audio_session/audio_session.dart";
+import "package:shared_preferences/shared_preferences.dart";
+import "package:in_app_review/in_app_review.dart";
+import "dart:math" as math;
+import "dart:async";
+import "package:url_launcher/url_launcher.dart";
 
 void main() {
-  runApp(const MyApp());
+  runApp(const MantraMalaApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MantraMalaApp extends StatelessWidget {
+  const MantraMalaApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: "MantraMala",
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFD6A54B),
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: const Color(0xFF1C1E3A),
+        textTheme: const TextTheme(
+          displayLarge: TextStyle(
+            color: Color(0xFFF8F5F0),
+            fontWeight: FontWeight.bold,
+            fontSize: 48,
+          ),
+          displayMedium: TextStyle(
+            color: Color(0xFFF8F5F0),
+            fontWeight: FontWeight.bold,
+            fontSize: 32,
+          ),
+          bodyLarge: TextStyle(
+            color: Color(0xFFF8F5F0),
+            fontSize: 18,
+          ),
+          bodyMedium: TextStyle(
+            color: Color(0xFFA0A0A8),
+            fontSize: 16,
+          ),
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MantraMalaHome(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class MantraMalaHome extends StatefulWidget {
+  const MantraMalaHome({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<MantraMalaHome> createState() => _MantraMalaHomeState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _MantraMalaHomeState extends State<MantraMalaHome> {
+  int _currentCount = 0;
+  int _targetCount = 108;
+  bool _isCompleted = false;
+  late AudioPlayer _tapPlayer;
+  late AudioPlayer _bellPlayer;
+  late SharedPreferences _prefs;
+  Timer? _completionSoundTimer;
+  Timer? _completionSoundStopTimer;
+  int _totalMantras = 0; // All-time mantra count
+  double _volume = 0.8; // 0.0 - 1.0
+  bool _soundEnabled = true;
+  bool _hapticsEnabled = true;
+  bool _tapAnywhere = false;
+  // Disable tap sound globally (tab.mp3)
+  bool _tapClickSoundEnabled = false;
+  int _defaultTarget = 108;
+  DateTime? _firstLaunchDate;
+  bool _hasAskedForReview = false;
+
+  final List<int> presets = [27, 54, 108];
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeAudio();
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    _completionSoundTimer?.cancel();
+    _completionSoundStopTimer?.cancel();
+    _tapPlayer.dispose();
+    _bellPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeAudio() async {
+    // Configure audio session to prevent Live Caption notifications
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration(
+        avAudioSessionCategory: AVAudioSessionCategory.ambient,
+        avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.none,
+      ));
+    } catch (_) {
+      // Audio session configuration failed, continue anyway
+    }
+    
+    // Initialize players and attempt to preload assets if present
+    _tapPlayer = AudioPlayer();
+    _bellPlayer = AudioPlayer();
+    try {
+      // Set audio source; if assets are missing/invalid, fallback will be used
+      await _tapPlayer.setAudioSource(AudioSource.asset("assets/sounds/tab.mp3")).catchError((_) => Duration.zero);
+      await _bellPlayer.setAudioSource(AudioSource.asset("assets/sounds/Bell.mp3")).catchError((_) => Duration.zero);
+      await _tapPlayer.setVolume(_volume);
+      await _bellPlayer.setVolume(_volume);
+    } catch (_) {}
+  }
+
+  Future<void> _loadData() async {
+    _prefs = await SharedPreferences.getInstance();
+    
+    // Review tracking - initialize first launch date
+    final firstLaunchMs = _prefs.getInt("firstLaunchDate");
+    if (firstLaunchMs == null) {
+      _firstLaunchDate = DateTime.now();
+      await _prefs.setInt("firstLaunchDate", _firstLaunchDate!.millisecondsSinceEpoch);
+    } else {
+      _firstLaunchDate = DateTime.fromMillisecondsSinceEpoch(firstLaunchMs);
+    }
+    
+    setState(() {
+      _currentCount = _prefs.getInt("currentCount") ?? 0;
+      _targetCount = _prefs.getInt("targetCount") ?? 108;
+      _isCompleted = _prefs.getBool("isCompleted") ?? false;
+      _totalMantras = _prefs.getInt("totalMantras") ?? 0;
+      _volume = _prefs.getDouble("volume") ?? 0.8;
+      _soundEnabled = _prefs.getBool("soundEnabled") ?? true;
+      _hapticsEnabled = _prefs.getBool("hapticsEnabled") ?? true;
+      _tapAnywhere = _prefs.getBool("tapAnywhere") ?? false;
+      _defaultTarget = _prefs.getInt("defaultTarget") ?? 108;
+      _hasAskedForReview = _prefs.getBool("hasAskedForReview") ?? false;
+      // Set target to default (108) on first install or when count is zero
+      _targetCount = _prefs.getInt("targetCount") ?? 108;
+      if (_currentCount == 0) {
+        _targetCount = _defaultTarget;
+      }
+    });
+    try {
+      await _tapPlayer.setVolume(_volume);
+      await _bellPlayer.setVolume(_volume);
+    } catch (_) {}
+  }
+
+  Future<void> _saveData() async {
+    await _prefs.setInt("currentCount", _currentCount);
+    await _prefs.setInt("targetCount", _targetCount);
+    await _prefs.setBool("isCompleted", _isCompleted);
+    await _prefs.setInt("totalMantras", _totalMantras);
+    await _prefs.setDouble("volume", _volume);
+    await _prefs.setBool("soundEnabled", _soundEnabled);
+    await _prefs.setBool("hapticsEnabled", _hapticsEnabled);
+    await _prefs.setBool("tapAnywhere", _tapAnywhere);
+    await _prefs.setInt("defaultTarget", _defaultTarget);
+    await _prefs.setBool("hasAskedForReview", _hasAskedForReview);
+  }
+
+  Future<void> _checkAndRequestReview() async {
+    // Only ask once
+    if (_hasAskedForReview) return;
+    
+    // Check if 3 days have passed since first launch
+    if (_firstLaunchDate == null) return;
+    final daysSinceInstall = DateTime.now().difference(_firstLaunchDate!).inDays;
+    if (daysSinceInstall < 3) return;
+    
+    // Check if user has counted at least 10 mantras
+    if (_totalMantras < 10) return;
+    
+    try {
+      final InAppReview inAppReview = InAppReview.instance;
+      if (await inAppReview.isAvailable()) {
+        await inAppReview.requestReview();
+        _hasAskedForReview = true;
+        await _saveData();
+      }
+    } catch (e) {
+      // Silently fail - review request is not critical
+    }
+  }
+
+  Future<void> _playTapSound() async {
+    // Respect global disable for tap sound
+    if (!_soundEnabled || !_tapClickSoundEnabled) return;
+    // Prefer just_audio if source set; otherwise system click
+    try {
+      if (_tapPlayer.audioSource != null) {
+        await _tapPlayer.seek(Duration.zero);
+        await _tapPlayer.play();
+      } else {
+        // Intentionally disabled: no system click fallback
+      }
+    } catch (_) {
+      // Intentionally disabled: no system click fallback
+    }
+  }
+
+  void _stopCompletionSoundLoop() {
+    _completionSoundTimer?.cancel();
+    _completionSoundStopTimer?.cancel();
+    // Re-disable tap click sound after completion window
+    _tapClickSoundEnabled = false;
+  }
+
+  Future<void> _playCompletionSound() async {
+    if (!_soundEnabled) return;
+    try {
+      // Stop the player first to ensure clean state
+      await _bellPlayer.stop();
+      // Seek to beginning
+      await _bellPlayer.seek(Duration.zero);
+      // Play the bell sound
+      await _bellPlayer.play();
+    } catch (e) {
+      // If playing fails, try to reload and play
+      try {
+        await _bellPlayer.stop();
+        await _bellPlayer.setAudioSource(AudioSource.asset("assets/sounds/Bell.mp3"));
+        await _bellPlayer.setVolume(_volume);
+        await _bellPlayer.seek(Duration.zero);
+        await _bellPlayer.play();
+      } catch (_) {
+        // Silently fail if sound playback fails
+      }
+    }
+  }
+
+  void _setTarget(int target) {
+    setState(() {
+      _targetCount = target;
+      _currentCount = 0;
+      _isCompleted = false;
+    });
+    _saveData();
+  }
 
   void _incrementCounter() {
+    if (!_isCompleted) {
+      final bool willComplete = (_currentCount + 1) >= _targetCount;
+      
+      setState(() {
+        _currentCount++;
+        _totalMantras++;
+        if (_currentCount >= _targetCount) {
+          _isCompleted = true;
+        }
+      });
+      
+      // Show completion sheet and play sound AFTER setState completes
+      if (willComplete) {
+        // Use WidgetsBinding to ensure the UI is ready
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _showCompletionSheet();
+            _playCompletionSound();
+          }
+        });
+      }
+      
+      // Haptic feedback and sound/vibration
+      if (willComplete) {
+        // Strong vibration pattern on completion
+        if (_hapticsEnabled) {
+          HapticFeedback.heavyImpact();
+          Future.delayed(const Duration(milliseconds: 200), () {
+            if (mounted && _hapticsEnabled) HapticFeedback.mediumImpact();
+          });
+          Future.delayed(const Duration(milliseconds: 400), () {
+            if (mounted && _hapticsEnabled) HapticFeedback.mediumImpact();
+          });
+        }
+      } else {
+        // Light tap haptic feedback on each count
+        if (_hapticsEnabled) HapticFeedback.lightImpact();
+        _playTapSound();
+      }
+      
+      _saveData();
+      
+      // Check if we should request a review
+      _checkAndRequestReview();
+    }
+  }
+
+  void _resetCounter() {
+    _stopCompletionSoundLoop();
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _currentCount = 0;
+      _isCompleted = false;
     });
+    _saveData();
+  }
+
+  void _showCompletionSheet() {
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF2A2C48),
+      isDismissible: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.emoji_events, color: Color(0xFFD6A54B), size: 32),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Session Complete",
+                          style: Theme.of(ctx).textTheme.displayMedium?.copyWith(color: const Color(0xFFD6A54B)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "You reached $_targetCount mantras.",
+                    style: Theme.of(ctx).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Total mantras: $_totalMantras",
+                    style: Theme.of(ctx).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            _stopCompletionSoundLoop();
+                            Navigator.of(ctx).pop();
+                            _resetCounter();
+                          },
+                          icon: const Icon(Icons.restart_alt, size: 22),
+                          label: const Text("Reset", style: TextStyle(fontSize: 15)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      if (_targetCount < _defaultTarget)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              _stopCompletionSoundLoop();
+                              Navigator.of(ctx).pop();
+                              // Increase target to next preset or +10%
+                              final presetsSorted = [...presets]..sort();
+                              int next = _targetCount;
+                              for (final p in presetsSorted) {
+                                if (p > _targetCount) { next = p; break; }
+                              }
+                              if (next == _targetCount) {
+                                next = (_targetCount * 1.1).round();
+                              }
+                              _setTarget(next);
+                            },
+                            icon: const Icon(Icons.trending_up, size: 22),
+                            label: const Text("Increase", style: TextStyle(fontSize: 15)),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
+                        ),
+                      if (_targetCount >= _defaultTarget)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              _stopCompletionSoundLoop();
+                              Navigator.of(ctx).pop();
+                            },
+                            icon: const Icon(Icons.close, size: 22),
+                            label: const Text("Done", style: TextStyle(fontSize: 15)),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    ).whenComplete(() {
+      // Stop the loop when the sheet is closed (by any means)
+      _stopCompletionSoundLoop();
+    });
+  }
+
+  double _getProgressPercentage() {
+    if (_targetCount == 0) return 0;
+    return (_currentCount / _targetCount).clamp(0.0, 1.0);
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    // Global pointer listener: stop completion sound on any interaction
+    return Listener(
+      onPointerDown: (_) {
+        _stopCompletionSoundLoop();
+      },
+      child: Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
+        centerTitle: true,
+        toolbarHeight: 80,
+        title: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [Color(0xFFD6A54B), Color(0xFFF8F5F0), Color(0xFFD6A54B)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ).createShader(bounds),
+              child: const Text(
+                'MantraMala',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            const Text(
+              'Japa • Chant • Meditate',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 1.5,
+                color: Color(0xFFD0D0D0),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF1C1E3A),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings, size: 32),
+            tooltip: "Settings",
+            onPressed: () async {
+              // Stop any completion sound loop on interaction
+              if (_isCompleted) _stopCompletionSoundLoop();
+              await Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => SettingsPage(
+                  volume: _volume,
+                  soundEnabled: _soundEnabled,
+                  hapticsEnabled: _hapticsEnabled,
+                  tapAnywhere: _tapAnywhere,
+                  defaultTarget: _defaultTarget,
+                  onChanged: (s) async {
+                    setState(() {
+                      _volume = s.volume;
+                      _soundEnabled = s.soundEnabled;
+                      _hapticsEnabled = s.hapticsEnabled;
+                      _tapAnywhere = s.tapAnywhere;
+                      _defaultTarget = s.defaultTarget;
+                      // Always update target count to reflect new default
+                      _targetCount = _defaultTarget;
+                    });
+                    try {
+                      await _tapPlayer.setVolume(_volume);
+                      await _bellPlayer.setVolume(_volume);
+                    } catch (_) {}
+                    _saveData();
+                  },
+                  onResetTotalMantras: () async {
+                    setState(() {
+                      _totalMantras = 0;
+                    });
+                    await _prefs.setInt("totalMantras", 0);
+                  },
+                  onResetTodaysTarget: () async {
+                    setState(() {
+                      _currentCount = 0;
+                      _isCompleted = false;
+                      _targetCount = _defaultTarget;
+                    });
+                    await _saveData();
+                  },
+                ),
+              ));
+            },
+          )
+        ],
+      ),
+      body: SafeArea(
+        child: GestureDetector(
+          onTap: () {
+            if (_isCompleted) {
+              _stopCompletionSoundLoop();
+            } else if (_tapAnywhere) {
+              _incrementCounter();
+            }
+          },
+          behavior: HitTestBehavior.translucent,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: screenWidth * 0.1,
+                vertical: screenHeight * 0.05,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                _buildStatsBar(context, screenWidth),
+                SizedBox(height: screenHeight * 0.04),
+                _buildCircularCounter(context, screenWidth * 1.1),
+                SizedBox(height: screenHeight * 0.03),
+                _buildResetButton(context, screenWidth * 0.35),
+                SizedBox(height: screenHeight * 0.02),
+                _buildTapButton(context, screenWidth * 0.9),
+                SizedBox(height: screenHeight * 0.02),
+                _buildStatusText(context),
+              ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  }
+
+  Widget _buildStatsBar(BuildContext context, double screenWidth) {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF3A3C4E),
+            Color(0xFF2A2C3E),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF000000).withValues(alpha: 0.5),
+            blurRadius: 24,
+            spreadRadius: 0,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: const Color(0xFF1A1C2E).withValues(alpha: 0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: const Color(0xFF4A4C5E).withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              const Color(0xFF262835).withValues(alpha: 0.8),
+              const Color(0xFF1A1C2E).withValues(alpha: 0.95),
+            ],
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            Expanded(
+              child: _buildStatItem(
+                context,
+                "Total Count",
+                _totalMantras.toString(),
+              ),
+            ),
+            Container(
+              width: 2,
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    const Color(0xFF4A4C5E).withValues(alpha: 0.6),
+                    Colors.transparent,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+            Expanded(
+              child: _buildStatItem(
+                context,
+                "Target",
+                _targetCount.toString(),
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+    );
+  }
+
+  Widget _buildStatItem(BuildContext context, String label, String value) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: const Color(0xFF9A9CA8).withValues(alpha: 0.8),
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.9,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF3A3C4E),
+                Color(0xFF2A2C3E),
+              ],
+            ),
+            border: Border.all(
+              color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFFD96A).withValues(alpha: 0.2),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ShaderMask(
+            shaderCallback: (bounds) => const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFFFFE55C),
+                Color(0xFFD6A54B),
+              ],
+            ).createShader(bounds),
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: 0.5,
+                shadows: [
+                  Shadow(
+                    color: Color(0x70000000),
+                    blurRadius: 6,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCircularCounter(BuildContext context, double screenWidth) {
+    final counterSize = screenWidth * 0.65;
+    final progress = _getProgressPercentage();
+    return Container(
+      width: counterSize,
+      height: counterSize,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 30,
+            spreadRadius: -5,
+            offset: const Offset(0, 15),
+          ),
+          BoxShadow(
+            color: const Color(0xFFD6A54B).withValues(alpha: 0.15),
+            blurRadius: 40,
+            spreadRadius: -10,
+            offset: const Offset(0, 0),
+          ),
+        ],
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            center: Alignment.topLeft,
+            radius: 1.2,
+            colors: [
+              const Color(0xFF3A3C58).withValues(alpha: 0.9),
+              const Color(0xFF2A2C48),
+              const Color(0xFF1C1E3A),
+              const Color(0xFF14162A),
+            ],
+            stops: const [0.0, 0.3, 0.7, 1.0],
+          ),
+          border: Border.all(
+            color: const Color(0xFF4A4C6E).withValues(alpha: 0.3),
+            width: 1.5,
+          ),
+        ),
+        child: Container(
+          margin: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.05),
+                Colors.transparent,
+                Colors.black.withValues(alpha: 0.2),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Background track with inner shadow effect
+              CustomPaint(
+                size: Size(counterSize, counterSize),
+                painter: CircleProgressPainter(
+                  progress: 1.0,
+                  color: const Color(0xFF0D0E1A).withValues(alpha: 0.6),
+                  strokeWidth: 12,
+                ),
+              ),
+              // Subtle glow track
+              CustomPaint(
+                size: Size(counterSize, counterSize),
+                painter: CircleProgressPainter(
+                  progress: 1.0,
+                  color: const Color(0xFF3A3C4E).withValues(alpha: 0.2),
+                  strokeWidth: 11,
+                ),
+              ),
+              // Progress arc with gradient effect
+              CustomPaint(
+                size: Size(counterSize, counterSize),
+                painter: GradientCircleProgressPainter(
+                  progress: progress,
+                  strokeWidth: 12,
+                ),
+              ),
+              // Outer glow on progress
+              if (progress > 0)
+                CustomPaint(
+                  size: Size(counterSize, counterSize),
+                  painter: CircleProgressPainter(
+                    progress: progress,
+                    color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
+                    strokeWidth: 16,
+                  ),
+                ),
+              // Content
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        const Color(0xFFFFFFFF),
+                        const Color(0xFFE8E8E8),
+                      ],
+                    ).createShader(bounds),
+                    child: Text(
+                      _currentCount.toString(),
+                      style: const TextStyle(
+                        fontSize: 80,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        height: 1.0,
+                        shadows: [
+                          Shadow(
+                            color: Color(0x40000000),
+                            blurRadius: 8,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "/ $_targetCount",
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: const Color(0xFFA0A0A8).withValues(alpha: 0.8),
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: LinearGradient(
+                        colors: progress >= 1.0
+                            ? [
+                                const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                                const Color(0xFF45A049).withValues(alpha: 0.2),
+                              ]
+                            : [
+                                const Color(0xFFD6A54B).withValues(alpha: 0.2),
+                                const Color(0xFFB8873D).withValues(alpha: 0.15),
+                              ],
+                      ),
+                      border: Border.all(
+                        color: progress >= 1.0
+                            ? const Color(0xFF4CAF50).withValues(alpha: 0.5)
+                            : const Color(0xFFD6A54B).withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: ShaderMask(
+                      shaderCallback: (bounds) => LinearGradient(
+                        colors: progress >= 1.0
+                            ? [
+                                const Color(0xFF66BB6A),
+                                const Color(0xFF4CAF50),
+                              ]
+                            : [
+                                const Color(0xFFFFD96A),
+                                const Color(0xFFD6A54B),
+                              ],
+                      ).createShader(bounds),
+                      child: Text(
+                        "${(progress * 100).toStringAsFixed(0)}%",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
+  }
+
+  Widget _buildStatusText(BuildContext context) {
+    if (_isCompleted) {
+      return ShaderMask(
+        shaderCallback: (bounds) => const LinearGradient(
+          colors: [
+            Color(0xFF66BB6A),
+            Color(0xFF4CAF50),
+          ],
+        ).createShader(bounds),
+        child: const SizedBox.shrink(),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildTapButton(BuildContext context, double screenWidth) {
+    return Center(
+      child: Container(
+        width: screenWidth * 0.85,
+        height: 72,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(36),
+          gradient: _isCompleted
+              ? LinearGradient(
+                  colors: [
+                    const Color(0xFF3A3C4E).withValues(alpha: 0.9),
+                    const Color(0xFF2A2C48).withValues(alpha: 0.9),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : const LinearGradient(
+                  colors: [
+                    Color(0xFFFFE55C),
+                    Color(0xFFE5B84D),
+                    Color(0xFFC4934D),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  stops: [0.0, 0.5, 1.0],
+                ),
+          boxShadow: _isCompleted
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF000000).withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: const Color(0xFFFFD96A).withValues(alpha: 0.7),
+                    blurRadius: 28,
+                    spreadRadius: 3,
+                    offset: const Offset(0, 10),
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFFFFE55C).withValues(alpha: 0.4),
+                    blurRadius: 40,
+                    spreadRadius: -8,
+                    offset: const Offset(0, 0),
+                  ),
+                ],
+          border: _isCompleted
+              ? Border.all(color: const Color(0xFF3A3C4E), width: 1.5)
+              : Border.all(
+                  color: const Color(0xFFFFF8E7).withValues(alpha: 0.5),
+                  width: 2,
+                ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(36),
+            gradient: _isCompleted
+                ? null
+                : LinearGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: 0.25),
+                      Colors.white.withValues(alpha: 0.05),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0.0, 0.6],
+                  ),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _isCompleted ? null : _incrementCounter,
+              borderRadius: BorderRadius.circular(36),
+              splashColor: Colors.white.withValues(alpha: 0.3),
+              highlightColor: Colors.white.withValues(alpha: 0.15),
+              child: Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.touch_app,
+                      size: 28,
+                      color: _isCompleted ? const Color(0xFFA0A0A8) : const Color(0xFF1C1E3A),
+                    ),
+                    const SizedBox(width: 12),
+                    ShaderMask(
+                      shaderCallback: (bounds) => _isCompleted
+                          ? const LinearGradient(
+                              colors: [Color(0xFFA0A0A8), Color(0xFFA0A0A8)],
+                            ).createShader(bounds)
+                          : const LinearGradient(
+                              colors: [
+                                Color(0xFF1C1E3A),
+                                Color(0xFF0A0B1A),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ).createShader(bounds),
+                      child: Text(
+                        _isCompleted ? "Completed ✓" : "Tap to Count",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                          shadows: [
+                            Shadow(
+                              color: Color(0x60000000),
+                              blurRadius: 6,
+                              offset: Offset(0, 3),
+                            ),
+                            Shadow(
+                              color: Color(0x30000000),
+                              blurRadius: 12,
+                              offset: Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResetButton(BuildContext context, double screenWidth) {
+    return Center(
+      child: Container(
+        width: screenWidth * 0.5,
+        height: screenWidth * 0.5,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const RadialGradient(
+            center: Alignment.topLeft,
+            radius: 1.2,
+            colors: [
+              Color(0xFF3A3A3A),
+              Color(0xFF1C1C1C),
+              Color(0xFF0A0A0A),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF000000).withValues(alpha: 0.8),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+              spreadRadius: 4,
+            ),
+            BoxShadow(
+              color: const Color(0xFFFFD96A).withValues(alpha: 0.15),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+              spreadRadius: 2,
+            ),
+          ],
+          border: Border.all(
+            color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
+            width: 2.5,
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Metallic rim highlight
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      const Color(0xFFFFD96A).withValues(alpha: 0.2),
+                      Colors.transparent,
+                      const Color(0xFFFFD96A).withValues(alpha: 0.1),
+                    ],
+                    stops: const [0.0, 0.5, 1.0],
+                  ),
+                ),
+              ),
+            ),
+            // Glass shine overlay
+            Positioned(
+              top: screenWidth * 0.05,
+              left: screenWidth * 0.05,
+              right: screenWidth * 0.2,
+              height: screenWidth * 0.08,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(screenWidth * 0.2),
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFFFFFFFF).withValues(alpha: 0.25),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Button content
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  if (_isCompleted) _stopCompletionSoundLoop();
+                  _resetCounter();
+                },
+                borderRadius: BorderRadius.circular(screenWidth / 2),
+                splashColor: const Color(0xFFFFD96A).withValues(alpha: 0.2),
+                highlightColor: const Color(0xFFFFD96A).withValues(alpha: 0.1),
+                child: Center(
+                  child: Text(
+                    "RESET",
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.055,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFFFFD96A),
+                      letterSpacing: 2.5,
+                      shadows: [
+                        Shadow(
+                          color: const Color(0xFFFFD96A).withValues(alpha: 0.8),
+                          blurRadius: 20,
+                        ),
+                        Shadow(
+                          color: const Color(0xFFFFD96A).withValues(alpha: 0.5),
+                          blurRadius: 10,
+                        ),
+                        Shadow(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          offset: const Offset(0, 2),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SettingsData {
+  final double volume;
+  final bool soundEnabled;
+  final bool hapticsEnabled;
+  final bool tapAnywhere;
+  final int defaultTarget;
+
+  const SettingsData({
+    required this.volume,
+    required this.soundEnabled,
+    required this.hapticsEnabled,
+    required this.tapAnywhere,
+    required this.defaultTarget,
+  });
+}
+
+class SettingsPage extends StatefulWidget {
+  final double volume;
+  final bool soundEnabled;
+  final bool hapticsEnabled;
+  final bool tapAnywhere;
+  final int defaultTarget;
+  final Future<void> Function(SettingsData) onChanged;
+  final Future<void> Function() onResetTotalMantras;
+  final Future<void> Function() onResetTodaysTarget;
+
+  const SettingsPage({
+    super.key,
+    required this.volume,
+    required this.soundEnabled,
+    required this.hapticsEnabled,
+    required this.tapAnywhere,
+    required this.defaultTarget,
+    required this.onChanged,
+    required this.onResetTotalMantras,
+    required this.onResetTodaysTarget,
+  });
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  late double _volume;
+  late bool _soundEnabled;
+  late bool _hapticsEnabled;
+  late bool _tapAnywhere;
+  late int _defaultTarget;
+  late FixedExtentScrollController _thousandsController;
+  late FixedExtentScrollController _hundredsController;
+  late FixedExtentScrollController _tensController;
+  late FixedExtentScrollController _onesController;
+
+  @override
+  void initState() {
+    super.initState();
+    _volume = widget.volume;
+    _soundEnabled = widget.soundEnabled;
+    _hapticsEnabled = widget.hapticsEnabled;
+    _tapAnywhere = widget.tapAnywhere;
+    _defaultTarget = widget.defaultTarget;
+    
+    // Initialize scroll controllers to current target value
+    _thousandsController = FixedExtentScrollController(initialItem: (_defaultTarget ~/ 1000) % 2);
+    _hundredsController = FixedExtentScrollController(initialItem: (_defaultTarget ~/ 100) % 10);
+    _tensController = FixedExtentScrollController(initialItem: (_defaultTarget ~/ 10) % 10);
+    _onesController = FixedExtentScrollController(initialItem: _defaultTarget % 10);
+  }
+
+  @override
+  void dispose() {
+    _thousandsController.dispose();
+    _hundredsController.dispose();
+    _tensController.dispose();
+    _onesController.dispose();
+    super.dispose();
+  }
+
+  void _updateTargetFromPickers() {
+    final thousands = _thousandsController.selectedItem % 2; // 0-1 only
+    final hundreds = _hundredsController.selectedItem % 10;
+    final tens = _tensController.selectedItem % 10;
+    final ones = _onesController.selectedItem % 10;
+    final newTarget = (thousands * 1000) + (hundreds * 100) + (tens * 10) + ones;
+    // Cap at 1008 and ensure minimum is 1
+    final cappedTarget = newTarget > 1008 ? 1008 : (newTarget == 0 ? 1 : newTarget);
+    setState(() => _defaultTarget = cappedTarget);
+    _autoSave();
+  }
+
+  void _autoSave() {
+    widget.onChanged(SettingsData(
+      volume: _volume,
+      soundEnabled: _soundEnabled,
+      hapticsEnabled: _hapticsEnabled,
+      tapAnywhere: _tapAnywhere,
+      defaultTarget: _defaultTarget,
+    ));
+  }
+
+  Widget _buildNumberWheel(FixedExtentScrollController controller, String label, {int maxDigit = 9}) {
+    final digitCount = maxDigit + 1;
+    return Column(
+      children: [
+        Container(
+          height: 82,
+          width: 44,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF2A2C48), Color(0xFF1F2131)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(
+              color: const Color(0xFFFFD96A).withValues(alpha: 0.2),
+              width: 0.7,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Selection highlight in center
+              Center(
+                child: Container(
+                  height: 37,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFFFFD96A).withValues(alpha: 0.15),
+                        const Color(0xFFFFD96A).withValues(alpha: 0.25),
+                        const Color(0xFFFFD96A).withValues(alpha: 0.15),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              // Number wheel
+              ListWheelScrollView.useDelegate(
+                controller: controller,
+                itemExtent: 37,
+                diameterRatio: 1.5,
+                physics: const FixedExtentScrollPhysics(),
+                perspective: 0.003,
+                onSelectedItemChanged: (_) => _updateTargetFromPickers(),
+                childDelegate: ListWheelChildLoopingListDelegate(
+                  children: List.generate(digitCount, (index) {
+                    return Center(
+                      child: Text(
+                        index.toString(),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFFFD96A),
+                          height: 1.0,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Settings")),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            Center(
+              child: Text(
+                "Scroll the wheels to set your daily target",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: const Color(0xFFA0A0A8).withValues(alpha: 0.9),
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Rolling Number Picker (Slot Machine Style)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF262835), Color(0xFF1A1C2E)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFD96A).withValues(alpha: 0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 7,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    // Current Target Display
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFD96A), Color(0xFFD6A54B)],
+                        ),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        _defaultTarget.toString().padLeft(4, '0'),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1C1E3A),
+                          letterSpacing: 4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Rolling Number Wheels
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildNumberWheel(_thousandsController, "1000s", maxDigit: 1),
+                        const SizedBox(width: 5),
+                        _buildNumberWheel(_hundredsController, "100s"),
+                        const SizedBox(width: 5),
+                        _buildNumberWheel(_tensController, "10s"),
+                        const SizedBox(width: 5),
+                        _buildNumberWheel(_onesController, "1s", maxDigit: 8),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Scroll to select target (1-1008)",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: const Color(0xFFA0A0A8).withValues(alpha: 0.9),
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(children: [
+              Switch(value: _soundEnabled, onChanged: (v) {
+                setState(() => _soundEnabled = v);
+                _autoSave();
+              }),
+              const SizedBox(width: 8),
+              const Text("Enable Sound"),
+            ]),
+            Row(children: [
+              Switch(value: _tapAnywhere, onChanged: (v) {
+                setState(() => _tapAnywhere = v);
+                _autoSave();
+              }),
+              const SizedBox(width: 8),
+              const Text("Tap Anywhere to Count"),
+            ]),
+            const SizedBox(height: 12),
+            // Reset Total Count Button
+            Row(children: [
+              Switch(
+                value: false,
+                onChanged: (v) async {
+                  // Show confirmation dialog
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      backgroundColor: const Color(0xFF2A2C48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      title: const Text(
+                        "Reset Total Count?",
+                        style: TextStyle(color: Color(0xFFFFD96A)),
+                      ),
+                      content: Text(
+                        "This will reset your lifetime mantra count to 0. This action cannot be undone.",
+                        style: TextStyle(
+                          color: const Color(0xFFF8F5F0).withValues(alpha: 0.9),
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text(
+                            "Cancel",
+                            style: TextStyle(color: Color(0xFFA0A0A8)),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFFD96A),
+                            foregroundColor: const Color(0xFF1C1E3A),
+                          ),
+                          child: const Text("Reset"),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed == true) {
+                    await widget.onResetTotalMantras();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Total mantras count has been reset"),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+              const SizedBox(width: 8),
+              const Text("Reset Total Count"),
+            ]),
+            const SizedBox(height: 16),
+            Text("Volume", style: Theme.of(context).textTheme.bodyLarge),
+            Slider(
+              value: _volume,
+              min: 0.0,
+              max: 1.0,
+              divisions: 10,
+              label: (_volume * 100).round().toString(),
+              onChanged: (v) {
+                setState(() => _volume = v);
+                _autoSave();
+              },
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: Text(
+                "Settings are saved automatically",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: const Color(0xFFA0A0A8).withValues(alpha: 0.8),
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Support & Contributions Handle
+            GestureDetector(
+              onTap: () => _showSupportBottomSheet(context),
+              onVerticalDragEnd: (details) {
+                if (details.primaryVelocity! < 0) {
+                  _showSupportBottomSheet(context);
+                }
+              },
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.85,
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2A2C48), Color(0xFF1F2131)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFD96A).withValues(alpha: 0.2),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Icon(Icons.keyboard_arrow_up, color: Color(0xFFFFD96A), size: 24),
+                    const Text(
+                      "Support & Contributions",
+                      style: TextStyle(
+                        color: Color(0xFFFFD96A),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Icon(Icons.keyboard_arrow_up, color: Color(0xFFFFD96A), size: 24),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    ),
+    );
+  }
+
+  void _showSupportBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1C1E3A), Color(0xFF252745)],
+          ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFD96A).withValues(alpha: 0.1),
+              blurRadius: 30,
+              spreadRadius: 5,
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // Ram Mandir Temple Background
+            Positioned.fill(
+              child: CustomPaint(
+                painter: HimalayanTemplePainter(),
+              ),
+            ),
+            // Content overlay
+            SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Drag handle
+                    Container(
+                      width: 50,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    // Title with gaming-quality text
+                    Text(
+                      "Support the Journey 🙏",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFFFFD96A),
+                        letterSpacing: 1.2,
+                        shadows: [
+                          Shadow(
+                            color: const Color(0xFFFFD96A).withValues(alpha: 0.8),
+                            blurRadius: 20,
+                          ),
+                          Shadow(
+                            color: const Color(0xFFD4AF37).withValues(alpha: 0.6),
+                            offset: const Offset(0, 3),
+                            blurRadius: 10,
+                          ),
+                          Shadow(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            offset: const Offset(0, 4),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Body text with enhanced styling
+                    Text(
+                      "Your contribution helps us maintain and improve MantraMala, keeping it free and ad-free for everyone. Every donation, big or small, supports our mission to provide a peaceful spiritual practice tool.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFFF8F5F0).withValues(alpha: 0.95),
+                        height: 1.6,
+                        letterSpacing: 0.3,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withValues(alpha: 0.4),
+                            offset: const Offset(0, 1),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+                    // India UPI Button with premium styling
+                    _buildPremiumDonationButton(
+                      context: context,
+                      title: "Support from India 🇮🇳",
+                      emoji: "",
+                      onTap: () async {
+                        final upiUrl = Uri.parse('upi://pay?pa=6472084641@icici&pn=MantraMala&cu=INR');
+                        try {
+                          await launchUrl(upiUrl, mode: LaunchMode.externalApplication);
+                        } catch (e) {
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('No UPI app found. Please install Google Pay, PhonePe, or Paytm.'),
+                              duration: Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    // Worldwide Ko-fi Button with premium styling
+                    _buildPremiumDonationButton(
+                      context: context,
+                      title: "Support from Worldwide 🌍",
+                      emoji: "",
+                      onTap: () async {
+                        final kofiUrl = Uri.parse('https://ko-fi.com/mantramala');
+                        try {
+                          final result = await launchUrl(kofiUrl, mode: LaunchMode.externalApplication);
+                          if (!result) {
+                            throw Exception('Failed to launch URL');
+                          }
+                        } catch (e) {
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Cannot open browser. Please try again later.'),
+                              duration: Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                    // Footer text with enhanced styling
+                    Text(
+                      "Thank you for being part of this spiritual journey! 🙏✨",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFFA0A0A8).withValues(alpha: 0.9),
+                        letterSpacing: 0.4,
+                        height: 1.4,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            offset: const Offset(0, 1),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumDonationButton({
+    required BuildContext context,
+    required String title,
+    required String emoji,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      height: 64,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF3A3A3A), Color(0xFF1C1C1C), Color(0xFF0A0A0A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+            spreadRadius: 2,
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.5),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: const Color(0xFFFFD96A).withValues(alpha: 0.4),
+          width: 2,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          splashColor: const Color(0xFFFFD96A).withValues(alpha: 0.2),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  emoji,
+                  style: const TextStyle(fontSize: 28),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFFFD96A),
+                    letterSpacing: 0.8,
+                    shadows: [
+                      Shadow(
+                        color: const Color(0xFFFFD96A).withValues(alpha: 0.6),
+                        blurRadius: 10,
+                      ),
+                      Shadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        offset: const Offset(0, 2),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class HimalayanTemplePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final basePaint = Paint()
+      ..color = const Color(0xFFFFD96A).withValues(alpha: 0.06)
+      ..style = PaintingStyle.fill;
+
+    final outlinePaint = Paint()
+      ..color = const Color(0xFFFFD96A).withValues(alpha: 0.10)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final width = size.width;
+    final height = size.height;
+    final centerX = width / 2;
+
+    // 1. Grand stepped platform (bottom foundation)
+    final platformWidth = width * 0.35;
+    final platformHeight = height * 0.03;
+    final platformY = height * 0.80;
+    
+    for (int i = 0; i < 3; i++) {
+      final stepWidth = platformWidth + (i * width * 0.04);
+      final stepY = platformY + (i * platformHeight);
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(centerX, stepY),
+          width: stepWidth,
+          height: platformHeight,
+        ),
+        basePaint,
+      );
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(centerX, stepY),
+          width: stepWidth,
+          height: platformHeight,
+        ),
+        outlinePaint,
+      );
+    }
+
+    // 2. Main temple base (rectangular foundation)
+    final baseWidth = width * 0.50;
+    final baseHeight = height * 0.20;
+    final baseY = platformY - baseHeight;
+    
+    canvas.drawRect(
+      Rect.fromLTWH(centerX - baseWidth / 2, baseY, baseWidth, baseHeight),
+      basePaint,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(centerX - baseWidth / 2, baseY, baseWidth, baseHeight),
+      outlinePaint,
+    );
+
+    // 3. Five colonnade pillars
+    final pillarWidth = width * 0.03;
+    final pillarHeight = height * 0.10;
+    final pillarSpacing = width * 0.10;
+    final pillarY = baseY;
+    
+    for (int i = -2; i <= 2; i++) {
+      final pillarX = centerX + (i * pillarSpacing) - pillarWidth / 2;
+      canvas.drawRect(
+        Rect.fromLTWH(pillarX, pillarY, pillarWidth, pillarHeight),
+        basePaint,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(pillarX, pillarY, pillarWidth, pillarHeight),
+        outlinePaint,
+      );
+    }
+
+    // 4. Three-tiered shikhara (tapering tower)
+    final tier1Width = width * 0.18;
+    final tier1Height = height * 0.08;
+    final tier1Y = baseY - tier1Height;
+    
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(centerX, tier1Y),
+        width: tier1Width,
+        height: tier1Height,
+      ),
+      basePaint,
+    );
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(centerX, tier1Y),
+        width: tier1Width,
+        height: tier1Height,
+      ),
+      outlinePaint,
+    );
+
+    final tier2Width = width * 0.12;
+    final tier2Height = height * 0.06;
+    final tier2Y = tier1Y - tier2Height;
+    
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(centerX, tier2Y),
+        width: tier2Width,
+        height: tier2Height,
+      ),
+      basePaint,
+    );
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(centerX, tier2Y),
+        width: tier2Width,
+        height: tier2Height,
+      ),
+      outlinePaint,
+    );
+
+    final tier3Width = width * 0.08;
+    final tier3Height = height * 0.05;
+    final tier3Y = tier2Y - tier3Height;
+    
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(centerX, tier3Y),
+        width: tier3Width,
+        height: tier3Height,
+      ),
+      basePaint,
+    );
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(centerX, tier3Y),
+        width: tier3Width,
+        height: tier3Height,
+      ),
+      outlinePaint,
+    );
+
+    // 5. Central spire (triangular peak)
+    final spireWidth = width * 0.04;
+    final spireHeight = height * 0.06;
+    final spireY = tier3Y - tier3Height / 2;
+    
+    final spirePath = Path()
+      ..moveTo(centerX, spireY - spireHeight)
+      ..lineTo(centerX - spireWidth / 2, spireY)
+      ..lineTo(centerX + spireWidth / 2, spireY)
+      ..close();
+    
+    canvas.drawPath(spirePath, basePaint);
+    canvas.drawPath(spirePath, outlinePaint);
+
+    // 6. Kalash dome (circular ornament)
+    final kalashRadius = width * 0.015;
+    final kalashY = spireY - spireHeight;
+    
+    canvas.drawCircle(
+      Offset(centerX, kalashY),
+      kalashRadius,
+      basePaint,
+    );
+    canvas.drawCircle(
+      Offset(centerX, kalashY),
+      kalashRadius,
+      outlinePaint,
+    );
+
+    // 7. Flag pole (vertical line)
+    final flagPoleHeight = height * 0.06;
+    final flagPoleY = kalashY - kalashRadius;
+    
+    canvas.drawLine(
+      Offset(centerX, flagPoleY),
+      Offset(centerX, flagPoleY - flagPoleHeight),
+      outlinePaint,
+    );
+
+    // 8. Triangular flag at top
+    final flagWidth = width * 0.025;
+    final flagHeight = height * 0.02;
+    final flagY = flagPoleY - flagPoleHeight;
+    
+    final flagPath = Path()
+      ..moveTo(centerX, flagY)
+      ..lineTo(centerX + flagWidth, flagY + flagHeight / 2)
+      ..lineTo(centerX, flagY + flagHeight)
+      ..close();
+    
+    canvas.drawPath(flagPath, basePaint);
+    canvas.drawPath(flagPath, outlinePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class CircleProgressPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final double strokeWidth;
+
+  CircleProgressPainter({required this.progress, required this.color, required this.strokeWidth});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color..strokeWidth = strokeWidth..strokeCap = StrokeCap.round..style = PaintingStyle.stroke;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+    canvas.drawArc(Rect.fromCenter(center: center, width: radius * 2, height: radius * 2), -math.pi / 2, 2 * math.pi * progress, false, paint);
+  }
+
+  @override
+  bool shouldRepaint(CircleProgressPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color || oldDelegate.strokeWidth != strokeWidth;
+  }
+}
+
+class GradientCircleProgressPainter extends CustomPainter {
+  final double progress;
+  final double strokeWidth;
+
+  GradientCircleProgressPainter({required this.progress, required this.strokeWidth});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0) {
+      // Nothing to paint for zero progress; avoids invalid SweepGradient angles
+      return;
+    }
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+    final rect = Rect.fromCenter(center: center, width: radius * 2, height: radius * 2);
+
+    final gradient = SweepGradient(
+      startAngle: -math.pi / 2,
+      endAngle: -math.pi / 2 + (2 * math.pi * progress),
+      colors: const [
+        Color(0xFFFFD96A),
+        Color(0xFFD6A54B),
+        Color(0xFFB8873D),
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    );
+
+    final paint = Paint()
+      ..shader = gradient.createShader(rect)
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawArc(rect, -math.pi / 2, 2 * math.pi * progress, false, paint);
+  }
+
+  @override
+  bool shouldRepaint(GradientCircleProgressPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.strokeWidth != strokeWidth;
   }
 }
