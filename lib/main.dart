@@ -37,14 +37,8 @@ class MantraMalaApp extends StatelessWidget {
             fontWeight: FontWeight.bold,
             fontSize: 32,
           ),
-          bodyLarge: TextStyle(
-            color: Color(0xFFF8F5F0),
-            fontSize: 18,
-          ),
-          bodyMedium: TextStyle(
-            color: Color(0xFFA0A0A8),
-            fontSize: 16,
-          ),
+          bodyLarge: TextStyle(color: Color(0xFFF8F5F0), fontSize: 18),
+          bodyMedium: TextStyle(color: Color(0xFFA0A0A8), fontSize: 16),
         ),
       ),
       home: const MantraMalaHome(),
@@ -79,6 +73,11 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
   DateTime? _firstLaunchDate;
   bool _hasAskedForReview = false;
 
+  // Timer-based counting state
+  bool _isTimerRunning = false;
+  Timer? _countingTimer;
+  double _intervalSeconds = 2.0; // Default 2 seconds per mantra
+
   final List<int> presets = [27, 54, 108];
 
   @override
@@ -92,6 +91,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
   void dispose() {
     _completionSoundTimer?.cancel();
     _completionSoundStopTimer?.cancel();
+    _countingTimer?.cancel();
     _tapPlayer.dispose();
     _bellPlayer.dispose();
     super.dispose();
@@ -101,21 +101,27 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
     // Configure audio session to prevent Live Caption notifications
     try {
       final session = await AudioSession.instance;
-      await session.configure(const AudioSessionConfiguration(
-        avAudioSessionCategory: AVAudioSessionCategory.ambient,
-        avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.none,
-      ));
+      await session.configure(
+        const AudioSessionConfiguration(
+          avAudioSessionCategory: AVAudioSessionCategory.ambient,
+          avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.none,
+        ),
+      );
     } catch (_) {
       // Audio session configuration failed, continue anyway
     }
-    
+
     // Initialize players and attempt to preload assets if present
     _tapPlayer = AudioPlayer();
     _bellPlayer = AudioPlayer();
     try {
       // Set audio source; if assets are missing/invalid, fallback will be used
-      await _tapPlayer.setAudioSource(AudioSource.asset("assets/sounds/tab.mp3")).catchError((_) => Duration.zero);
-      await _bellPlayer.setAudioSource(AudioSource.asset("assets/sounds/Bell.mp3")).catchError((_) => Duration.zero);
+      await _tapPlayer
+          .setAudioSource(AudioSource.asset("assets/sounds/tab.mp3"))
+          .catchError((_) => Duration.zero);
+      await _bellPlayer
+          .setAudioSource(AudioSource.asset("assets/sounds/Bell.mp3"))
+          .catchError((_) => Duration.zero);
       await _tapPlayer.setVolume(_volume);
       await _bellPlayer.setVolume(_volume);
     } catch (_) {}
@@ -123,16 +129,19 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
 
   Future<void> _loadData() async {
     _prefs = await SharedPreferences.getInstance();
-    
+
     // Review tracking - initialize first launch date
     final firstLaunchMs = _prefs.getInt("firstLaunchDate");
     if (firstLaunchMs == null) {
       _firstLaunchDate = DateTime.now();
-      await _prefs.setInt("firstLaunchDate", _firstLaunchDate!.millisecondsSinceEpoch);
+      await _prefs.setInt(
+        "firstLaunchDate",
+        _firstLaunchDate!.millisecondsSinceEpoch,
+      );
     } else {
       _firstLaunchDate = DateTime.fromMillisecondsSinceEpoch(firstLaunchMs);
     }
-    
+
     setState(() {
       _currentCount = _prefs.getInt("currentCount") ?? 0;
       _targetCount = _prefs.getInt("targetCount") ?? 108;
@@ -144,6 +153,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
       _tapAnywhere = _prefs.getBool("tapAnywhere") ?? false;
       _defaultTarget = _prefs.getInt("defaultTarget") ?? 108;
       _hasAskedForReview = _prefs.getBool("hasAskedForReview") ?? false;
+      _intervalSeconds = _prefs.getDouble("intervalSeconds") ?? 2.0;
       // Set target to default (108) on first install or when count is zero
       _targetCount = _prefs.getInt("targetCount") ?? 108;
       if (_currentCount == 0) {
@@ -167,20 +177,23 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
     await _prefs.setBool("tapAnywhere", _tapAnywhere);
     await _prefs.setInt("defaultTarget", _defaultTarget);
     await _prefs.setBool("hasAskedForReview", _hasAskedForReview);
+    await _prefs.setDouble("intervalSeconds", _intervalSeconds);
   }
 
   Future<void> _checkAndRequestReview() async {
     // Only ask once
     if (_hasAskedForReview) return;
-    
+
     // Check if 3 days have passed since first launch
     if (_firstLaunchDate == null) return;
-    final daysSinceInstall = DateTime.now().difference(_firstLaunchDate!).inDays;
+    final daysSinceInstall = DateTime.now()
+        .difference(_firstLaunchDate!)
+        .inDays;
     if (daysSinceInstall < 3) return;
-    
+
     // Check if user has counted at least 10 mantras
     if (_totalMantras < 10) return;
-    
+
     try {
       final InAppReview inAppReview = InAppReview.instance;
       if (await inAppReview.isAvailable()) {
@@ -229,7 +242,9 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
       // If playing fails, try to reload and play
       try {
         await _bellPlayer.stop();
-        await _bellPlayer.setAudioSource(AudioSource.asset("assets/sounds/Bell.mp3"));
+        await _bellPlayer.setAudioSource(
+          AudioSource.asset("assets/sounds/Bell.mp3"),
+        );
         await _bellPlayer.setVolume(_volume);
         await _bellPlayer.seek(Duration.zero);
         await _bellPlayer.play();
@@ -251,7 +266,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
   void _incrementCounter() {
     if (!_isCompleted) {
       final bool willComplete = (_currentCount + 1) >= _targetCount;
-      
+
       setState(() {
         _currentCount++;
         _totalMantras++;
@@ -259,7 +274,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
           _isCompleted = true;
         }
       });
-      
+
       // Show completion sheet and play sound AFTER setState completes
       if (willComplete) {
         // Use WidgetsBinding to ensure the UI is ready
@@ -270,7 +285,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
           }
         });
       }
-      
+
       // Haptic feedback and sound/vibration
       if (willComplete) {
         // Strong vibration pattern on completion
@@ -288,9 +303,9 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
         if (_hapticsEnabled) HapticFeedback.lightImpact();
         _playTapSound();
       }
-      
+
       _saveData();
-      
+
       // Check if we should request a review
       _checkAndRequestReview();
     }
@@ -298,11 +313,53 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
 
   void _resetCounter() {
     _stopCompletionSoundLoop();
+    _stopTimer();
     setState(() {
       _currentCount = 0;
       _isCompleted = false;
+      _isTimerRunning = false;
     });
     _saveData();
+  }
+
+  void _startTimer() {
+    if (_isCompleted || _isTimerRunning) return;
+
+    setState(() {
+      _isTimerRunning = true;
+    });
+
+    final duration = Duration(seconds: _intervalSeconds.round());
+
+    _countingTimer = Timer.periodic(duration, (timer) {
+      if (_isCompleted) {
+        _stopTimer();
+      } else {
+        _incrementCounter();
+      }
+    });
+  }
+
+  void _pauseTimer() {
+    _stopTimer();
+  }
+
+  void _stopTimer() {
+    _countingTimer?.cancel();
+    _countingTimer = null;
+    setState(() {
+      _isTimerRunning = false;
+    });
+  }
+
+  void _toggleTimer() {
+    if (_isCompleted) return;
+
+    if (_isTimerRunning) {
+      _pauseTimer();
+    } else {
+      _startTimer();
+    }
   }
 
   void _showCompletionSheet() {
@@ -331,12 +388,17 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.emoji_events, color: Color(0xFFD6A54B), size: 32),
+                      const Icon(
+                        Icons.emoji_events,
+                        color: Color(0xFFD6A54B),
+                        size: 32,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           "Session Complete",
-                          style: Theme.of(ctx).textTheme.displayMedium?.copyWith(color: const Color(0xFFD6A54B)),
+                          style: Theme.of(ctx).textTheme.displayMedium
+                              ?.copyWith(color: const Color(0xFFD6A54B)),
                         ),
                       ),
                     ],
@@ -362,7 +424,10 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                             _resetCounter();
                           },
                           icon: const Icon(Icons.restart_alt, size: 22),
-                          label: const Text("Reset", style: TextStyle(fontSize: 15)),
+                          label: const Text(
+                            "Reset",
+                            style: TextStyle(fontSize: 15),
+                          ),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
@@ -379,7 +444,10 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                               final presetsSorted = [...presets]..sort();
                               int next = _targetCount;
                               for (final p in presetsSorted) {
-                                if (p > _targetCount) { next = p; break; }
+                                if (p > _targetCount) {
+                                  next = p;
+                                  break;
+                                }
                               }
                               if (next == _targetCount) {
                                 next = (_targetCount * 1.1).round();
@@ -387,7 +455,10 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                               _setTarget(next);
                             },
                             icon: const Icon(Icons.trending_up, size: 22),
-                            label: const Text("Increase", style: TextStyle(fontSize: 15)),
+                            label: const Text(
+                              "Increase",
+                              style: TextStyle(fontSize: 15),
+                            ),
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
@@ -401,7 +472,10 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                               Navigator.of(ctx).pop();
                             },
                             icon: const Icon(Icons.close, size: 22),
-                            label: const Text("Done", style: TextStyle(fontSize: 15)),
+                            label: const Text(
+                              "Done",
+                              style: TextStyle(fontSize: 15),
+                            ),
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
@@ -437,128 +511,136 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
         _stopCompletionSoundLoop();
       },
       child: Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        toolbarHeight: 80,
-        title: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [Color(0xFFD6A54B), Color(0xFFF8F5F0), Color(0xFFD6A54B)],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ).createShader(bounds),
-              child: const Text(
-                'MantraMala',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                  color: Colors.white,
+        appBar: AppBar(
+          centerTitle: true,
+          toolbarHeight: 80,
+          title: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [
+                    Color(0xFFD6A54B),
+                    Color(0xFFF8F5F0),
+                    Color(0xFFD6A54B),
+                  ],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ).createShader(bounds),
+                child: const Text(
+                  'MantraMala',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 2),
-            const Text(
-              'Japa • Chant • Meditate',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 1.5,
-                color: Color(0xFFD0D0D0),
+              const SizedBox(height: 2),
+              const Text(
+                'Japa • Chant • Meditate',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 1.5,
+                  color: Color(0xFFD0D0D0),
+                ),
               ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF1C1E3A),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings, size: 32),
+              tooltip: "Settings",
+              onPressed: () async {
+                // Stop any completion sound loop on interaction
+                if (_isCompleted) _stopCompletionSoundLoop();
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SettingsPage(
+                      volume: _volume,
+                      soundEnabled: _soundEnabled,
+                      hapticsEnabled: _hapticsEnabled,
+                      tapAnywhere: _tapAnywhere,
+                      defaultTarget: _defaultTarget,
+                      intervalSeconds: _intervalSeconds,
+                      onChanged: (s) async {
+                        setState(() {
+                          _volume = s.volume;
+                          _soundEnabled = s.soundEnabled;
+                          _hapticsEnabled = s.hapticsEnabled;
+                          _tapAnywhere = s.tapAnywhere;
+                          _defaultTarget = s.defaultTarget;
+                          _intervalSeconds = s.intervalSeconds;
+                          // Always update target count to reflect new default
+                          _targetCount = _defaultTarget;
+                        });
+                        try {
+                          await _tapPlayer.setVolume(_volume);
+                          await _bellPlayer.setVolume(_volume);
+                        } catch (_) {}
+                        _saveData();
+                      },
+                      onResetTotalMantras: () async {
+                        setState(() {
+                          _totalMantras = 0;
+                        });
+                        await _prefs.setInt("totalMantras", 0);
+                      },
+                      onResetTodaysTarget: () async {
+                        setState(() {
+                          _currentCount = 0;
+                          _isCompleted = false;
+                          _targetCount = _defaultTarget;
+                        });
+                        await _saveData();
+                      },
+                    ),
+                  ),
+                );
+              },
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF1C1E3A),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings, size: 32),
-            tooltip: "Settings",
-            onPressed: () async {
-              // Stop any completion sound loop on interaction
-              if (_isCompleted) _stopCompletionSoundLoop();
-              await Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => SettingsPage(
-                  volume: _volume,
-                  soundEnabled: _soundEnabled,
-                  hapticsEnabled: _hapticsEnabled,
-                  tapAnywhere: _tapAnywhere,
-                  defaultTarget: _defaultTarget,
-                  onChanged: (s) async {
-                    setState(() {
-                      _volume = s.volume;
-                      _soundEnabled = s.soundEnabled;
-                      _hapticsEnabled = s.hapticsEnabled;
-                      _tapAnywhere = s.tapAnywhere;
-                      _defaultTarget = s.defaultTarget;
-                      // Always update target count to reflect new default
-                      _targetCount = _defaultTarget;
-                    });
-                    try {
-                      await _tapPlayer.setVolume(_volume);
-                      await _bellPlayer.setVolume(_volume);
-                    } catch (_) {}
-                    _saveData();
-                  },
-                  onResetTotalMantras: () async {
-                    setState(() {
-                      _totalMantras = 0;
-                    });
-                    await _prefs.setInt("totalMantras", 0);
-                  },
-                  onResetTodaysTarget: () async {
-                    setState(() {
-                      _currentCount = 0;
-                      _isCompleted = false;
-                      _targetCount = _defaultTarget;
-                    });
-                    await _saveData();
-                  },
-                ),
-              ));
+        body: SafeArea(
+          child: GestureDetector(
+            onTap: () {
+              if (_isCompleted) {
+                _stopCompletionSoundLoop();
+              } else if (_tapAnywhere) {
+                _incrementCounter();
+              }
             },
-          )
-        ],
-      ),
-      body: SafeArea(
-        child: GestureDetector(
-          onTap: () {
-            if (_isCompleted) {
-              _stopCompletionSoundLoop();
-            } else if (_tapAnywhere) {
-              _incrementCounter();
-            }
-          },
-          behavior: HitTestBehavior.translucent,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: screenWidth * 0.1,
-                vertical: screenHeight * 0.05,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                _buildStatsBar(context, screenWidth),
-                SizedBox(height: screenHeight * 0.04),
-                _buildCircularCounter(context, screenWidth * 1.1),
-                SizedBox(height: screenHeight * 0.03),
-                _buildResetButton(context, screenWidth * 0.35),
-                SizedBox(height: screenHeight * 0.02),
-                _buildTapButton(context, screenWidth * 0.9),
-                SizedBox(height: screenHeight * 0.02),
-                _buildStatusText(context),
-              ],
+            behavior: HitTestBehavior.translucent,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: screenWidth * 0.1,
+                  vertical: screenHeight * 0.05,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildStatsBar(context, screenWidth),
+                    SizedBox(height: screenHeight * 0.025),
+                    _buildCircularCounter(context, screenWidth * 0.8),
+                    SizedBox(height: screenHeight * 0.018),
+                    _buildResetButton(context, screenWidth * 0.28),
+                    SizedBox(height: screenHeight * 0.012),
+                    _buildTapButton(context, screenWidth * 0.7),
+                    SizedBox(height: screenHeight * 0.012),
+                    _buildStatusText(context),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildStatsBar(BuildContext context, double screenWidth) {
@@ -569,10 +651,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF3A3C4E),
-            Color(0xFF2A2C3E),
-          ],
+          colors: [Color(0xFF3A3C4E), Color(0xFF2A2C3E)],
         ),
         boxShadow: [
           BoxShadow(
@@ -632,11 +711,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
               ),
             ),
             Expanded(
-              child: _buildStatItem(
-                context,
-                "Target",
-                _targetCount.toString(),
-              ),
+              child: _buildStatItem(context, "Target", _targetCount.toString()),
             ),
           ],
         ),
@@ -651,34 +726,31 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
-            color: const Color(0xFF9A9CA8).withValues(alpha: 0.8),
+            fontSize: 11,
+            color: const Color(0xFF9A9CA8).withOpacity(0.7),
             fontWeight: FontWeight.w600,
-            letterSpacing: 0.9,
+            letterSpacing: 0.7,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF3A3C4E),
-                Color(0xFF2A2C3E),
-              ],
+              colors: [Color(0xFF3A3C4E), Color(0xFF2A2C3E)],
             ),
             border: Border.all(
-              color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
-              width: 1.5,
+              color: const Color(0xFFFFD96A).withOpacity(0.22),
+              width: 1.1,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFFD96A).withValues(alpha: 0.2),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: const Color(0xFFFFD96A).withOpacity(0.13),
+                blurRadius: 7,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -686,23 +758,20 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
             shaderCallback: (bounds) => const LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFFFFE55C),
-                Color(0xFFD6A54B),
-              ],
+              colors: [Color(0xFFFFE55C), Color(0xFFD6A54B)],
             ).createShader(bounds),
             child: Text(
               value,
               style: const TextStyle(
-                fontSize: 32,
+                fontSize: 22,
                 fontWeight: FontWeight.w900,
                 color: Colors.white,
-                letterSpacing: 0.5,
+                letterSpacing: 0.3,
                 shadows: [
                   Shadow(
-                    color: Color(0x70000000),
-                    blurRadius: 6,
-                    offset: Offset(0, 3),
+                    color: Color(0x40000000),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
                   ),
                 ],
               ),
@@ -825,15 +894,15 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                     child: Text(
                       _currentCount.toString(),
                       style: const TextStyle(
-                        fontSize: 80,
+                        fontSize: 56,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         height: 1.0,
                         shadows: [
                           Shadow(
                             color: Color(0x40000000),
-                            blurRadius: 8,
-                            offset: Offset(0, 4),
+                            blurRadius: 6,
+                            offset: Offset(0, 3),
                           ),
                         ],
                       ),
@@ -843,15 +912,18 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                   Text(
                     "/ $_targetCount",
                     style: TextStyle(
-                      fontSize: 18,
-                      color: const Color(0xFFA0A0A8).withValues(alpha: 0.8),
+                      fontSize: 13,
+                      color: const Color(0xFFA0A0A8).withOpacity(0.7),
                       fontWeight: FontWeight.w500,
-                      letterSpacing: 0.5,
+                      letterSpacing: 0.3,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 10),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
                       gradient: LinearGradient(
@@ -875,10 +947,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                     child: ShaderMask(
                       shaderCallback: (bounds) => LinearGradient(
                         colors: progress >= 1.0
-                            ? [
-                                const Color(0xFF66BB6A),
-                                const Color(0xFF4CAF50),
-                              ]
+                            ? [const Color(0xFF66BB6A), const Color(0xFF4CAF50)]
                             : [
                                 const Color(0xFFFFD96A),
                                 const Color(0xFFD6A54B),
@@ -888,9 +957,9 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                         "${(progress * 100).toStringAsFixed(0)}%",
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
+                          letterSpacing: 0.7,
                         ),
                       ),
                     ),
@@ -908,10 +977,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
     if (_isCompleted) {
       return ShaderMask(
         shaderCallback: (bounds) => const LinearGradient(
-          colors: [
-            Color(0xFF66BB6A),
-            Color(0xFF4CAF50),
-          ],
+          colors: [Color(0xFF66BB6A), Color(0xFF4CAF50)],
         ).createShader(bounds),
         child: const SizedBox.shrink(),
       );
@@ -920,135 +986,202 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
   }
 
   Widget _buildTapButton(BuildContext context, double screenWidth) {
-    return Center(
-      child: Container(
-        width: screenWidth * 0.85,
-        height: 72,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(36),
-          gradient: _isCompleted
-              ? LinearGradient(
+    String buttonText;
+    IconData buttonIcon;
+
+    if (_isCompleted) {
+      buttonText = "Completed ✓";
+      buttonIcon = Icons.check_circle;
+    } else if (_isTimerRunning) {
+      buttonText = "Pause Timer";
+      buttonIcon = Icons.pause_circle_filled;
+    } else if (_currentCount > 0) {
+      buttonText = "Resume Timer";
+      buttonIcon = Icons.play_circle_filled;
+    } else {
+      buttonText = "Start Timer";
+      buttonIcon = Icons.play_circle_filled;
+    }
+
+    return Column(
+      children: [
+        // Interval display
+        if (!_isCompleted)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF3A3C4E).withValues(alpha: 0.9),
-                    const Color(0xFF2A2C48).withValues(alpha: 0.9),
+                    const Color(0xFF2A2C48).withValues(alpha: 0.8),
+                    const Color(0xFF1C1E3A).withValues(alpha: 0.9),
                   ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : const LinearGradient(
-                  colors: [
-                    Color(0xFFFFE55C),
-                    Color(0xFFE5B84D),
-                    Color(0xFFC4934D),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  stops: [0.0, 0.5, 1.0],
                 ),
-          boxShadow: _isCompleted
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF000000).withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 2),
+                border: Border.all(
+                  color: const Color(0xFFD6A54B).withValues(alpha: 0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.timer_outlined,
+                    size: 18,
+                    color: const Color(0xFFD6A54B),
                   ),
-                ]
-              : [
-                  BoxShadow(
-                    color: const Color(0xFFFFD96A).withValues(alpha: 0.7),
-                    blurRadius: 28,
-                    spreadRadius: 3,
-                    offset: const Offset(0, 10),
-                  ),
-                  BoxShadow(
-                    color: const Color(0xFFFFE55C).withValues(alpha: 0.4),
-                    blurRadius: 40,
-                    spreadRadius: -8,
-                    offset: const Offset(0, 0),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Interval: ${_intervalSeconds.toStringAsFixed(_intervalSeconds == _intervalSeconds.roundToDouble() ? 0 : 1)}s per mantra",
+                    style: TextStyle(
+                      color: const Color(0xFFA0A0A8).withValues(alpha: 0.9),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
-          border: _isCompleted
-              ? Border.all(color: const Color(0xFF3A3C4E), width: 1.5)
-              : Border.all(
-                  color: const Color(0xFFFFF8E7).withValues(alpha: 0.5),
-                  width: 2,
-                ),
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(36),
-            gradient: _isCompleted
-                ? null
-                : LinearGradient(
-                    colors: [
-                      Colors.white.withValues(alpha: 0.25),
-                      Colors.white.withValues(alpha: 0.05),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: const [0.0, 0.6],
-                  ),
+              ),
+            ),
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _isCompleted ? null : _incrementCounter,
+        // Main button
+        Center(
+          child: Container(
+            width: screenWidth * 0.85,
+            height: 72,
+            decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(36),
-              splashColor: Colors.white.withValues(alpha: 0.3),
-              highlightColor: Colors.white.withValues(alpha: 0.15),
-              child: Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.touch_app,
-                      size: 28,
-                      color: _isCompleted ? const Color(0xFFA0A0A8) : const Color(0xFF1C1E3A),
+              gradient: _isCompleted
+                  ? LinearGradient(
+                      colors: [
+                        const Color(0xFF3A3C4E).withValues(alpha: 0.9),
+                        const Color(0xFF2A2C48).withValues(alpha: 0.9),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : const LinearGradient(
+                      colors: [
+                        Color(0xFFFFE55C),
+                        Color(0xFFE5B84D),
+                        Color(0xFFC4934D),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      stops: [0.0, 0.5, 1.0],
                     ),
-                    const SizedBox(width: 12),
-                    ShaderMask(
-                      shaderCallback: (bounds) => _isCompleted
-                          ? const LinearGradient(
-                              colors: [Color(0xFFA0A0A8), Color(0xFFA0A0A8)],
-                            ).createShader(bounds)
-                          : const LinearGradient(
-                              colors: [
-                                Color(0xFF1C1E3A),
-                                Color(0xFF0A0B1A),
-                              ],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ).createShader(bounds),
-                      child: Text(
-                        _isCompleted ? "Completed ✓" : "Tap to Count",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                          shadows: [
-                            Shadow(
-                              color: Color(0x60000000),
-                              blurRadius: 6,
-                              offset: Offset(0, 3),
-                            ),
-                            Shadow(
-                              color: Color(0x30000000),
-                              blurRadius: 12,
-                              offset: Offset(0, 1),
-                            ),
-                          ],
-                        ),
+              boxShadow: _isCompleted
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF000000).withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 2),
                       ),
+                    ]
+                  : [
+                      BoxShadow(
+                        color: const Color(0xFFFFD96A).withValues(alpha: 0.7),
+                        blurRadius: 28,
+                        spreadRadius: 3,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: const Color(0xFFFFE55C).withValues(alpha: 0.4),
+                        blurRadius: 40,
+                        spreadRadius: -8,
+                        offset: const Offset(0, 0),
+                      ),
+                    ],
+              border: _isCompleted
+                  ? Border.all(color: const Color(0xFF3A3C4E), width: 1.5)
+                  : Border.all(
+                      color: const Color(0xFFFFF8E7).withValues(alpha: 0.5),
+                      width: 2,
                     ),
-                  ],
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(36),
+                gradient: _isCompleted
+                    ? null
+                    : LinearGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0.25),
+                          Colors.white.withValues(alpha: 0.05),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.6],
+                      ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _isCompleted ? null : _toggleTimer,
+                  borderRadius: BorderRadius.circular(36),
+                  splashColor: Colors.white.withValues(alpha: 0.3),
+                  highlightColor: Colors.white.withValues(alpha: 0.15),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          buttonIcon,
+                          size: 28,
+                          color: _isCompleted
+                              ? const Color(0xFFA0A0A8)
+                              : const Color(0xFF1C1E3A),
+                        ),
+                        const SizedBox(width: 12),
+                        ShaderMask(
+                          shaderCallback: (bounds) => _isCompleted
+                              ? const LinearGradient(
+                                  colors: [
+                                    Color(0xFFA0A0A8),
+                                    Color(0xFFA0A0A8),
+                                  ],
+                                ).createShader(bounds)
+                              : const LinearGradient(
+                                  colors: [
+                                    Color(0xFF1C1E3A),
+                                    Color(0xFF0A0B1A),
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ).createShader(bounds),
+                          child: Text(
+                            buttonText,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0x60000000),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 3),
+                                ),
+                                Shadow(
+                                  color: Color(0x30000000),
+                                  blurRadius: 12,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -1062,11 +1195,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
           gradient: const RadialGradient(
             center: Alignment.topLeft,
             radius: 1.2,
-            colors: [
-              Color(0xFF3A3A3A),
-              Color(0xFF1C1C1C),
-              Color(0xFF0A0A0A),
-            ],
+            colors: [Color(0xFF3A3A3A), Color(0xFF1C1C1C), Color(0xFF0A0A0A)],
             stops: [0.0, 0.5, 1.0],
           ),
           boxShadow: [
@@ -1099,9 +1228,13 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      const Color(0xFFFFD96A).withValues(alpha: 0.2),
+                      const Color(
+                        0xFFFFD96A,
+                      ).withValues(alpha: 0.2),
                       Colors.transparent,
-                      const Color(0xFFFFD96A).withValues(alpha: 0.1),
+                      const Color(
+                        0xFFFFD96A,
+                      ).withValues(alpha: 0.1),
                     ],
                     stops: const [0.0, 0.5, 1.0],
                   ),
@@ -1178,6 +1311,7 @@ class SettingsData {
   final bool hapticsEnabled;
   final bool tapAnywhere;
   final int defaultTarget;
+  final double intervalSeconds;
 
   const SettingsData({
     required this.volume,
@@ -1185,6 +1319,7 @@ class SettingsData {
     required this.hapticsEnabled,
     required this.tapAnywhere,
     required this.defaultTarget,
+    required this.intervalSeconds,
   });
 }
 
@@ -1194,6 +1329,7 @@ class SettingsPage extends StatefulWidget {
   final bool hapticsEnabled;
   final bool tapAnywhere;
   final int defaultTarget;
+  final double intervalSeconds;
   final Future<void> Function(SettingsData) onChanged;
   final Future<void> Function() onResetTotalMantras;
   final Future<void> Function() onResetTodaysTarget;
@@ -1205,6 +1341,7 @@ class SettingsPage extends StatefulWidget {
     required this.hapticsEnabled,
     required this.tapAnywhere,
     required this.defaultTarget,
+    required this.intervalSeconds,
     required this.onChanged,
     required this.onResetTotalMantras,
     required this.onResetTodaysTarget,
@@ -1220,6 +1357,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool _hapticsEnabled;
   late bool _tapAnywhere;
   late int _defaultTarget;
+  late double _intervalSeconds;
   late FixedExtentScrollController _thousandsController;
   late FixedExtentScrollController _hundredsController;
   late FixedExtentScrollController _tensController;
@@ -1233,12 +1371,21 @@ class _SettingsPageState extends State<SettingsPage> {
     _hapticsEnabled = widget.hapticsEnabled;
     _tapAnywhere = widget.tapAnywhere;
     _defaultTarget = widget.defaultTarget;
-    
+    _intervalSeconds = widget.intervalSeconds;
+
     // Initialize scroll controllers to current target value
-    _thousandsController = FixedExtentScrollController(initialItem: (_defaultTarget ~/ 1000) % 2);
-    _hundredsController = FixedExtentScrollController(initialItem: (_defaultTarget ~/ 100) % 10);
-    _tensController = FixedExtentScrollController(initialItem: (_defaultTarget ~/ 10) % 10);
-    _onesController = FixedExtentScrollController(initialItem: _defaultTarget % 10);
+    _thousandsController = FixedExtentScrollController(
+      initialItem: (_defaultTarget ~/ 1000) % 2,
+    );
+    _hundredsController = FixedExtentScrollController(
+      initialItem: (_defaultTarget ~/ 100) % 10,
+    );
+    _tensController = FixedExtentScrollController(
+      initialItem: (_defaultTarget ~/ 10) % 10,
+    );
+    _onesController = FixedExtentScrollController(
+      initialItem: _defaultTarget % 10,
+    );
   }
 
   @override
@@ -1255,24 +1402,90 @@ class _SettingsPageState extends State<SettingsPage> {
     final hundreds = _hundredsController.selectedItem % 10;
     final tens = _tensController.selectedItem % 10;
     final ones = _onesController.selectedItem % 10;
-    final newTarget = (thousands * 1000) + (hundreds * 100) + (tens * 10) + ones;
+    final newTarget =
+        (thousands * 1000) + (hundreds * 100) + (tens * 10) + ones;
     // Cap at 1008 and ensure minimum is 1
-    final cappedTarget = newTarget > 1008 ? 1008 : (newTarget == 0 ? 1 : newTarget);
+    final cappedTarget = newTarget > 1008
+        ? 1008
+        : (newTarget == 0 ? 1 : newTarget);
     setState(() => _defaultTarget = cappedTarget);
     _autoSave();
   }
 
   void _autoSave() {
-    widget.onChanged(SettingsData(
-      volume: _volume,
-      soundEnabled: _soundEnabled,
-      hapticsEnabled: _hapticsEnabled,
-      tapAnywhere: _tapAnywhere,
-      defaultTarget: _defaultTarget,
-    ));
+    widget.onChanged(
+      SettingsData(
+        volume: _volume,
+        soundEnabled: _soundEnabled,
+        hapticsEnabled: _hapticsEnabled,
+        tapAnywhere: _tapAnywhere,
+        defaultTarget: _defaultTarget,
+        intervalSeconds: _intervalSeconds,
+      ),
+    );
   }
 
-  Widget _buildNumberWheel(FixedExtentScrollController controller, String label, {int maxDigit = 9}) {
+  Widget _buildIntervalChip(double seconds) {
+    final isSelected = _intervalSeconds == seconds;
+    final label =
+        "${seconds.toStringAsFixed(seconds == seconds.roundToDouble() ? 0 : 1)}s";
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _intervalSeconds = seconds;
+        });
+        _autoSave();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? const LinearGradient(
+                  colors: [Color(0xFFFFD96A), Color(0xFFD6A54B)],
+                )
+              : LinearGradient(
+                  colors: [
+                    const Color(0xFF3A3C4E).withValues(alpha: 0.6),
+                    const Color(0xFF2A2C3E).withValues(alpha: 0.6),
+                  ],
+                ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFFFFE55C)
+                : const Color(0xFF4A4C5E).withValues(alpha: 0.4),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFFFD96A).withValues(alpha: 0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected
+                ? const Color(0xFF1C1E3A)
+                : const Color(0xFFA0A0A8),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNumberWheel(
+    FixedExtentScrollController controller,
+    String label, {
+    int maxDigit = 9,
+  }) {
     final digitCount = maxDigit + 1;
     return Column(
       children: [
@@ -1360,250 +1573,360 @@ class _SettingsPageState extends State<SettingsPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            Center(
-              child: Text(
+              Text(
                 "Scroll the wheels to set your daily target",
                 style: TextStyle(
-                  fontSize: 13,
-                  color: const Color(0xFFA0A0A8).withValues(alpha: 0.9),
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                  color: const Color(0xFFFFD96A).withOpacity(0.95),
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.2,
+                ),
+                textAlign: TextAlign.left,
+              ),
+              const SizedBox(height: 12),
+              // Rolling Number Picker (Slot Machine Style)
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF262835), Color(0xFF1A1C2E)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFFD96A).withValues(alpha: 0.15),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 7,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // Current Target Display
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 4,
+                          horizontal: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFFD96A), Color(0xFFD6A54B)],
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _defaultTarget.toString().padLeft(4, '0'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1C1E3A),
+                            letterSpacing: 3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      // Rolling Number Wheels
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildNumberWheel(
+                            _thousandsController,
+                            "1000s",
+                            maxDigit: 1,
+                          ),
+                          const SizedBox(width: 5),
+                          _buildNumberWheel(_hundredsController, "100s"),
+                          const SizedBox(width: 5),
+                          _buildNumberWheel(_tensController, "10s"),
+                          const SizedBox(width: 5),
+                          _buildNumberWheel(_onesController, "1s", maxDigit: 8),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        "Scroll to select target (1-1008)",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: const Color(0xFFA0A0A8).withValues(alpha: 0.9),
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            // Rolling Number Picker (Slot Machine Style)
-            Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              const SizedBox(height: 16),
+              // Timer Interval Selector
+              Text(
+                "Timer Interval",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: const Color(0xFFFFD96A).withValues(alpha: 0.9),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                "Time between each mantra count (in seconds)",
+                style: TextStyle(
+                  fontSize: 11,
+                  color: const Color(0xFFA0A0A8).withValues(alpha: 0.8),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF262835), Color(0xFF1A1C2E)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
                     width: 1,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFFD96A).withValues(alpha: 0.15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      blurRadius: 7,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: Column(
                   children: [
-                    // Current Target Display
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFFD96A), Color(0xFFD6A54B)],
-                        ),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        _defaultTarget.toString().padLeft(4, '0'),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1C1E3A),
-                          letterSpacing: 4,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    // Rolling Number Wheels
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
                       children: [
-                        _buildNumberWheel(_thousandsController, "1000s", maxDigit: 1),
-                        const SizedBox(width: 5),
-                        _buildNumberWheel(_hundredsController, "100s"),
-                        const SizedBox(width: 5),
-                        _buildNumberWheel(_tensController, "10s"),
-                        const SizedBox(width: 5),
-                        _buildNumberWheel(_onesController, "1s", maxDigit: 8),
+                        _buildIntervalChip(1),
+                        _buildIntervalChip(2),
+                        _buildIntervalChip(3),
+                        _buildIntervalChip(4),
+                        _buildIntervalChip(5),
+                        _buildIntervalChip(10),
+                        _buildIntervalChip(15),
+                        _buildIntervalChip(30),
+                        _buildIntervalChip(60),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      "Scroll to select target (1-1008)",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: const Color(0xFFA0A0A8).withValues(alpha: 0.9),
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w500,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1C1E3A).withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.timer,
+                            size: 18,
+                            color: const Color(0xFFFFD96A),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Current: ${_intervalSeconds.toStringAsFixed(_intervalSeconds == _intervalSeconds.roundToDouble() ? 0 : 1)}s",
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFFFFD96A),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Row(children: [
-              Switch(value: _soundEnabled, onChanged: (v) {
-                setState(() => _soundEnabled = v);
-                _autoSave();
-              }),
-              const SizedBox(width: 8),
-              const Text("Enable Sound"),
-            ]),
-            Row(children: [
-              Switch(value: _tapAnywhere, onChanged: (v) {
-                setState(() => _tapAnywhere = v);
-                _autoSave();
-              }),
-              const SizedBox(width: 8),
-              const Text("Tap Anywhere to Count"),
-            ]),
-            const SizedBox(height: 12),
-            // Reset Total Count Button
-            Row(children: [
-              Switch(
-                value: false,
-                onChanged: (v) async {
-                  // Show confirmation dialog
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      backgroundColor: const Color(0xFF2A2C48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      title: const Text(
-                        "Reset Total Count?",
-                        style: TextStyle(color: Color(0xFFFFD96A)),
-                      ),
-                      content: Text(
-                        "This will reset your lifetime mantra count to 0. This action cannot be undone.",
-                        style: TextStyle(
-                          color: const Color(0xFFF8F5F0).withValues(alpha: 0.9),
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          child: const Text(
-                            "Cancel",
-                            style: TextStyle(color: Color(0xFFA0A0A8)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Switch(
+                    value: _soundEnabled,
+                    onChanged: (v) {
+                      setState(() => _soundEnabled = v);
+                      _autoSave();
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  const Text("Enable Sound"),
+                ],
+              ),
+              // Removed 'Tap Anywhere to Count' button
+              // Reset Total Count Button
+              Row(
+                children: [
+                  Switch(
+                    value: false,
+                    onChanged: (v) async {
+                      // Show confirmation dialog
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          backgroundColor: const Color(0xFF2A2C48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => Navigator.of(context).pop(true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFFD96A),
-                            foregroundColor: const Color(0xFF1C1E3A),
+                          title: const Text(
+                            "Reset Total Count?",
+                            style: TextStyle(color: Color(0xFFFFD96A)),
                           ),
-                          child: const Text("Reset"),
+                          content: Text(
+                            "This will reset your lifetime mantra count to 0. This action cannot be undone.",
+                            style: TextStyle(
+                              color: const Color(
+                                0xFFF8F5F0,
+                              ).withValues(alpha: 0.9),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              child: const Text(
+                                "Cancel",
+                                style: TextStyle(color: Color(0xFFA0A0A8)),
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.of(context).pop(true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFFD96A),
+                                foregroundColor: const Color(0xFF1C1E3A),
+                              ),
+                              child: const Text("Reset"),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirmed == true) {
+                        await widget.onResetTotalMantras();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                "Total mantras count has been reset",
+                              ),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  const Text("Reset Total Count"),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text("Volume", style: Theme.of(context).textTheme.bodyMedium),
+              Slider(
+                value: _volume,
+                min: 0.0,
+                max: 1.0,
+                divisions: 10,
+                label: (_volume * 100).round().toString(),
+                onChanged: (v) {
+                  setState(() => _volume = v);
+                  _autoSave();
+                },
+              ),
+              const SizedBox(height: 6),
+              Center(
+                child: Text(
+                  "Settings are saved automatically",
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: const Color(0xFFA0A0A8).withValues(alpha: 0.8),
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Support & Contributions Handle
+              Center(
+                child: GestureDetector(
+                  onTap: () => _showSupportBottomSheet(context),
+                  onVerticalDragEnd: (details) {
+                    if (details.primaryVelocity! < 0) {
+                      _showSupportBottomSheet(context);
+                    }
+                  },
+                  child: Container(
+                    width: MediaQuery.of(context).size.width * 0.85,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF2A2C48), Color(0xFF1F2131)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFFD96A).withValues(alpha: 0.2),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                  );
-
-                  if (confirmed == true) {
-                    await widget.onResetTotalMantras();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Total mantras count has been reset"),
-                          duration: Duration(seconds: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Icon(
+                          Icons.keyboard_arrow_up,
+                          color: Color(0xFFFFD96A),
+                          size: 24,
                         ),
-                      );
-                    }
-                  }
-                },
-              ),
-              const SizedBox(width: 8),
-              const Text("Reset Total Count"),
-            ]),
-            const SizedBox(height: 16),
-            Text("Volume", style: Theme.of(context).textTheme.bodyLarge),
-            Slider(
-              value: _volume,
-              min: 0.0,
-              max: 1.0,
-              divisions: 10,
-              label: (_volume * 100).round().toString(),
-              onChanged: (v) {
-                setState(() => _volume = v);
-                _autoSave();
-              },
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: Text(
-                "Settings are saved automatically",
-                style: TextStyle(
-                  fontSize: 13,
-                  color: const Color(0xFFA0A0A8).withValues(alpha: 0.8),
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            // Support & Contributions Handle
-            GestureDetector(
-              onTap: () => _showSupportBottomSheet(context),
-              onVerticalDragEnd: (details) {
-                if (details.primaryVelocity! < 0) {
-                  _showSupportBottomSheet(context);
-                }
-              },
-              child: Container(
-                width: MediaQuery.of(context).size.width * 0.85,
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF2A2C48), Color(0xFF1F2131)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFFD96A).withValues(alpha: 0.2),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                        const Text(
+                          "Support & Contributions",
+                          style: TextStyle(
+                            color: Color(0xFFFFD96A),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Icon(
+                          Icons.keyboard_arrow_up,
+                          color: Color(0xFFFFD96A),
+                          size: 24,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Icon(Icons.keyboard_arrow_up, color: Color(0xFFFFD96A), size: 24),
-                    const Text(
-                      "Support & Contributions",
-                      style: TextStyle(
-                        color: Color(0xFFFFD96A),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Icon(Icons.keyboard_arrow_up, color: Color(0xFFFFD96A), size: 24),
-                  ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-          ],
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 
@@ -1633,9 +1956,7 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             // Ram Mandir Temple Background
             Positioned.fill(
-              child: CustomPaint(
-                painter: HimalayanTemplePainter(),
-              ),
+              child: CustomPaint(painter: HimalayanTemplePainter()),
             ),
             // Content overlay
             SingleChildScrollView(
@@ -1665,11 +1986,15 @@ class _SettingsPageState extends State<SettingsPage> {
                         letterSpacing: 1.2,
                         shadows: [
                           Shadow(
-                            color: const Color(0xFFFFD96A).withValues(alpha: 0.8),
+                            color: const Color(
+                              0xFFFFD96A,
+                            ).withValues(alpha: 0.8),
                             blurRadius: 20,
                           ),
                           Shadow(
-                            color: const Color(0xFFD4AF37).withValues(alpha: 0.6),
+                            color: const Color(
+                              0xFFD4AF37,
+                            ).withValues(alpha: 0.6),
                             offset: const Offset(0, 3),
                             blurRadius: 10,
                           ),
@@ -1708,14 +2033,21 @@ class _SettingsPageState extends State<SettingsPage> {
                       title: "Support from India 🇮🇳",
                       emoji: "",
                       onTap: () async {
-                        final upiUrl = Uri.parse('upi://pay?pa=6472084641@icici&pn=MantraMala&cu=INR');
+                        final upiUrl = Uri.parse(
+                          'upi://pay?pa=6472084641@icici&pn=MantraMala&cu=INR',
+                        );
                         try {
-                          await launchUrl(upiUrl, mode: LaunchMode.externalApplication);
+                          await launchUrl(
+                            upiUrl,
+                            mode: LaunchMode.externalApplication,
+                          );
                         } catch (e) {
                           Navigator.of(context).pop();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('No UPI app found. Please install Google Pay, PhonePe, or Paytm.'),
+                              content: Text(
+                                'No UPI app found. Please install Google Pay, PhonePe, or Paytm.',
+                              ),
                               duration: Duration(seconds: 4),
                             ),
                           );
@@ -1729,9 +2061,14 @@ class _SettingsPageState extends State<SettingsPage> {
                       title: "Support from Worldwide 🌍",
                       emoji: "",
                       onTap: () async {
-                        final kofiUrl = Uri.parse('https://ko-fi.com/mantramala');
+                        final kofiUrl = Uri.parse(
+                          'https://ko-fi.com/mantramala',
+                        );
                         try {
-                          final result = await launchUrl(kofiUrl, mode: LaunchMode.externalApplication);
+                          final result = await launchUrl(
+                            kofiUrl,
+                            mode: LaunchMode.externalApplication,
+                          );
                           if (!result) {
                             throw Exception('Failed to launch URL');
                           }
@@ -1739,7 +2076,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           Navigator.of(context).pop();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Cannot open browser. Please try again later.'),
+                              content: Text(
+                                'Cannot open browser. Please try again later.',
+                              ),
                               duration: Duration(seconds: 4),
                             ),
                           );
@@ -1820,10 +2159,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  emoji,
-                  style: const TextStyle(fontSize: 28),
-                ),
+                Text(emoji, style: const TextStyle(fontSize: 28)),
                 const SizedBox(width: 12),
                 Text(
                   title,
@@ -1874,7 +2210,7 @@ class HimalayanTemplePainter extends CustomPainter {
     final platformWidth = width * 0.35;
     final platformHeight = height * 0.03;
     final platformY = height * 0.80;
-    
+
     for (int i = 0; i < 3; i++) {
       final stepWidth = platformWidth + (i * width * 0.04);
       final stepY = platformY + (i * platformHeight);
@@ -1900,7 +2236,7 @@ class HimalayanTemplePainter extends CustomPainter {
     final baseWidth = width * 0.50;
     final baseHeight = height * 0.20;
     final baseY = platformY - baseHeight;
-    
+
     canvas.drawRect(
       Rect.fromLTWH(centerX - baseWidth / 2, baseY, baseWidth, baseHeight),
       basePaint,
@@ -1915,7 +2251,7 @@ class HimalayanTemplePainter extends CustomPainter {
     final pillarHeight = height * 0.10;
     final pillarSpacing = width * 0.10;
     final pillarY = baseY;
-    
+
     for (int i = -2; i <= 2; i++) {
       final pillarX = centerX + (i * pillarSpacing) - pillarWidth / 2;
       canvas.drawRect(
@@ -1932,7 +2268,7 @@ class HimalayanTemplePainter extends CustomPainter {
     final tier1Width = width * 0.18;
     final tier1Height = height * 0.08;
     final tier1Y = baseY - tier1Height;
-    
+
     canvas.drawRect(
       Rect.fromCenter(
         center: Offset(centerX, tier1Y),
@@ -1953,7 +2289,7 @@ class HimalayanTemplePainter extends CustomPainter {
     final tier2Width = width * 0.12;
     final tier2Height = height * 0.06;
     final tier2Y = tier1Y - tier2Height;
-    
+
     canvas.drawRect(
       Rect.fromCenter(
         center: Offset(centerX, tier2Y),
@@ -1974,7 +2310,7 @@ class HimalayanTemplePainter extends CustomPainter {
     final tier3Width = width * 0.08;
     final tier3Height = height * 0.05;
     final tier3Y = tier2Y - tier3Height;
-    
+
     canvas.drawRect(
       Rect.fromCenter(
         center: Offset(centerX, tier3Y),
@@ -1996,35 +2332,27 @@ class HimalayanTemplePainter extends CustomPainter {
     final spireWidth = width * 0.04;
     final spireHeight = height * 0.06;
     final spireY = tier3Y - tier3Height / 2;
-    
+
     final spirePath = Path()
       ..moveTo(centerX, spireY - spireHeight)
       ..lineTo(centerX - spireWidth / 2, spireY)
       ..lineTo(centerX + spireWidth / 2, spireY)
       ..close();
-    
+
     canvas.drawPath(spirePath, basePaint);
     canvas.drawPath(spirePath, outlinePaint);
 
     // 6. Kalash dome (circular ornament)
     final kalashRadius = width * 0.015;
     final kalashY = spireY - spireHeight;
-    
-    canvas.drawCircle(
-      Offset(centerX, kalashY),
-      kalashRadius,
-      basePaint,
-    );
-    canvas.drawCircle(
-      Offset(centerX, kalashY),
-      kalashRadius,
-      outlinePaint,
-    );
+
+    canvas.drawCircle(Offset(centerX, kalashY), kalashRadius, basePaint);
+    canvas.drawCircle(Offset(centerX, kalashY), kalashRadius, outlinePaint);
 
     // 7. Flag pole (vertical line)
     final flagPoleHeight = height * 0.06;
     final flagPoleY = kalashY - kalashRadius;
-    
+
     canvas.drawLine(
       Offset(centerX, flagPoleY),
       Offset(centerX, flagPoleY - flagPoleHeight),
@@ -2035,13 +2363,13 @@ class HimalayanTemplePainter extends CustomPainter {
     final flagWidth = width * 0.025;
     final flagHeight = height * 0.02;
     final flagY = flagPoleY - flagPoleHeight;
-    
+
     final flagPath = Path()
       ..moveTo(centerX, flagY)
       ..lineTo(centerX + flagWidth, flagY + flagHeight / 2)
       ..lineTo(centerX, flagY + flagHeight)
       ..close();
-    
+
     canvas.drawPath(flagPath, basePaint);
     canvas.drawPath(flagPath, outlinePaint);
   }
@@ -2055,19 +2383,35 @@ class CircleProgressPainter extends CustomPainter {
   final Color color;
   final double strokeWidth;
 
-  CircleProgressPainter({required this.progress, required this.color, required this.strokeWidth});
+  CircleProgressPainter({
+    required this.progress,
+    required this.color,
+    required this.strokeWidth,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color..strokeWidth = strokeWidth..strokeCap = StrokeCap.round..style = PaintingStyle.stroke;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
     final center = Offset(size.width / 2, size.height / 2);
     final radius = (size.width - strokeWidth) / 2;
-    canvas.drawArc(Rect.fromCenter(center: center, width: radius * 2, height: radius * 2), -math.pi / 2, 2 * math.pi * progress, false, paint);
+    canvas.drawArc(
+      Rect.fromCenter(center: center, width: radius * 2, height: radius * 2),
+      -math.pi / 2,
+      2 * math.pi * progress,
+      false,
+      paint,
+    );
   }
 
   @override
   bool shouldRepaint(CircleProgressPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.color != color || oldDelegate.strokeWidth != strokeWidth;
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }
 
@@ -2075,7 +2419,10 @@ class GradientCircleProgressPainter extends CustomPainter {
   final double progress;
   final double strokeWidth;
 
-  GradientCircleProgressPainter({required this.progress, required this.strokeWidth});
+  GradientCircleProgressPainter({
+    required this.progress,
+    required this.strokeWidth,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2085,16 +2432,16 @@ class GradientCircleProgressPainter extends CustomPainter {
     }
     final center = Offset(size.width / 2, size.height / 2);
     final radius = (size.width - strokeWidth) / 2;
-    final rect = Rect.fromCenter(center: center, width: radius * 2, height: radius * 2);
+    final rect = Rect.fromCenter(
+      center: center,
+      width: radius * 2,
+      height: radius * 2,
+    );
 
     final gradient = SweepGradient(
       startAngle: -math.pi / 2,
       endAngle: -math.pi / 2 + (2 * math.pi * progress),
-      colors: const [
-        Color(0xFFFFD96A),
-        Color(0xFFD6A54B),
-        Color(0xFFB8873D),
-      ],
+      colors: const [Color(0xFFFFD96A), Color(0xFFD6A54B), Color(0xFFB8873D)],
       stops: const [0.0, 0.5, 1.0],
     );
 
@@ -2109,6 +2456,7 @@ class GradientCircleProgressPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(GradientCircleProgressPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.strokeWidth != strokeWidth;
+    return oldDelegate.progress != progress ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }

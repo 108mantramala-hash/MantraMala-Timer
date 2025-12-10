@@ -1,7 +1,7 @@
-# MantraMala - AI Agent Instructions
+# MantraMala Timer - AI Agent Instructions
 
 ## Project Overview
-MantraMala is a single-file Flutter app (v1.0.6+7) for mantra counting with premium UI. Published on Google Play Store as a free, ad-free spiritual practice tool. The entire app logic resides in `lib/main.dart` (~2046 lines).
+MantraMala Timer is a single-file Flutter app (v1.2.0+8) for timer-based mantra counting with premium UI. The entire app logic resides in `lib/main.dart` (~2400 lines). **Changed from manual tap counter to timer-based automatic counting.**
 
 ## Architecture
 
@@ -11,6 +11,7 @@ MantraMala is a single-file Flutter app (v1.0.6+7) for mantra counting with prem
 - **Key state variables** in `_MantraMalaHomeState`:
   - `_currentCount`, `_targetCount`, `_totalMantras` (lifetime counter)
   - `_isCompleted`, `_soundEnabled`, `_hapticsEnabled`, `_tapAnywhere`
+  - **Timer state**: `_isTimerRunning`, `_countingTimer`, `_intervalSeconds` (1-60s configurable)
   - `AudioPlayer` instances: `_tapPlayer` (disabled globally via `_tapClickSoundEnabled = false`), `_bellPlayer` (plays on completion)
 
 ### Audio System Pattern
@@ -26,11 +27,33 @@ await session.configure(const AudioSessionConfiguration(
 - Bell sound plays once on completion, no looping in current implementation
 - Volume controlled via `_volume` (0.0-1.0), persisted to SharedPreferences
 
+### Timer-Based Counting Pattern
+Uses `Timer.periodic` for automatic counting instead of manual taps:
+```dart
+void _startTimer() {
+  final duration = _intervalSeconds < 1.0
+      ? Duration(milliseconds: (_intervalSeconds * 1000).round())
+      : Duration(seconds: _intervalSeconds.round());
+  
+  _countingTimer = Timer.periodic(duration, (timer) {
+    if (_isCompleted) {
+      _stopTimer();
+    } else {
+      _incrementCounter(); // Triggers sound/haptics on each tick
+    }
+  });
+}
+```
+- Timer intervals: 1s, 2s, 3s, 4s, 5s, 10s, 15s, 30s, 60s (user selectable in Settings)
+- Button states: "Start Timer" → "Pause Timer" → "Resume Timer"
+- Timer stops automatically on target completion or manual reset
+
 ### Persistence Pattern
 All state saved via `_saveData()` called after every counter increment, setting change, or target modification:
 ```dart
 await _prefs.setInt("currentCount", _currentCount);
 await _prefs.setInt("totalMantras", _totalMantras);
+await _prefs.setDouble("intervalSeconds", _intervalSeconds);
 // ...
 ```
 
@@ -122,7 +145,7 @@ jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.a
 
 | File | Purpose |
 |------|---------|
-| `lib/main.dart` | **Entire app** - UI, state, audio, persistence (2046 lines) |
+| `lib/main.dart` | **Entire app** - UI, state, timer logic, audio, persistence (~2400 lines) |
 | `pubspec.yaml` | Dependencies: `just_audio`, `audio_session`, `shared_preferences`, `in_app_review`, `url_launcher` |
 | `assets/sounds/` | `Bell.mp3` (completion), `tab.mp3` (unused - disabled) |
 | `android/app/build.gradle.kts` | Kotlin DSL, loads `key.properties` for signing |
