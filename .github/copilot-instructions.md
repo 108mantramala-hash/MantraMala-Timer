@@ -1,7 +1,7 @@
 # MantraMala - AI Agent Instructions
 
 ## Project Overview
-MantraMala is a single-file Flutter app (v1.0.3) for mantra counting with premium UI. Published on Google Play Store as a free, ad-free spiritual practice tool. The entire app logic resides in `lib/main.dart` (~2100 lines).
+MantraMala is a single-file Flutter app (v1.0.6+7) for mantra counting with premium UI. Published on Google Play Store as a free, ad-free spiritual practice tool. The entire app logic resides in `lib/main.dart` (~2046 lines).
 
 ## Architecture
 
@@ -71,9 +71,20 @@ if (_hapticsEnabled) {
 ## Build & Release
 
 ### Version Management
-Update **both** locations for releases:
-1. `pubspec.yaml`: `version: 1.0.3+4` (name+code)
-2. No separate versioning - Flutter auto-syncs to Android via `build.gradle.kts`
+Update version in `pubspec.yaml`: `version: 1.0.6+7` (name+code)
+- Flutter auto-syncs to Android via `build.gradle.kts` (reads `flutter.versionCode`/`flutter.versionName`)
+- Version format: `MAJOR.MINOR.PATCH+BUILD_NUMBER`
+- Increment both version name and code for each Play Store release
+
+### Automated Release Script
+Use `build_release.ps1` PowerShell script to automate builds:
+```powershell
+.\build_release.ps1  # Auto-detects version from pubspec.yaml
+.\build_release.ps1 -SkipBuild  # Only organize existing builds
+```
+- Creates dated folders: `releases/YYYY-MM-DD/vX.X.X/`
+- Copies AAB, APK, source files, and documentation
+- Verifies signatures automatically
 
 ### Signing Configuration
 **Critical files**:
@@ -82,16 +93,23 @@ Update **both** locations for releases:
 - Credentials: `mantramala2025` for store/key passwords, alias `upload`
 
 ### Build Commands
-```bash
+```powershell
 # Signed App Bundle for Play Store
 flutter build appbundle --release
 
 # Signed APK for testing
 flutter build apk --release
 
-# Verify signature
-jarsigner -verify -verbose build/app/outputs/bundle/release/app-release.aab
+# Verify AAB signature (JAR signing)
+jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
+
+# Verify APK signature (APK Signature Scheme v2/v3)
+& "$env:ANDROID_HOME\build-tools\35.0.0\apksigner.bat" verify --verbose build\app\outputs\flutter-apk\app-release.apk
 ```
+
+**Build Output Locations:**
+- AAB: `build/app/outputs/bundle/release/app-release.aab` (43.1 MB)
+- APK: `build/app/outputs/flutter-apk/app-release.apk` (48.8 MB)
 
 ### Play Store Metadata
 - **Package**: `com.mantramala.app`
@@ -104,10 +122,11 @@ jarsigner -verify -verbose build/app/outputs/bundle/release/app-release.aab
 
 | File | Purpose |
 |------|---------|
-| `lib/main.dart` | **Entire app** - UI, state, audio, persistence (2122 lines) |
+| `lib/main.dart` | **Entire app** - UI, state, audio, persistence (2046 lines) |
 | `pubspec.yaml` | Dependencies: `just_audio`, `audio_session`, `shared_preferences`, `in_app_review`, `url_launcher` |
 | `assets/sounds/` | `Bell.mp3` (completion), `tab.mp3` (unused - disabled) |
 | `android/app/build.gradle.kts` | Kotlin DSL, loads `key.properties` for signing |
+| `build_release.ps1` | Automated PowerShell script for release builds & organization |
 | `RELEASE_SIGNING.md` | Keystore backup instructions, verification commands |
 | `PLAY_STORE_SUBMISSION.md` | Store listings, descriptions (80/4000 char limits) |
 | `NEXT_STEPS.md` | Release checklist, Play Store submission workflow |
@@ -149,7 +168,8 @@ Uses `package:flutter_lints/flutter.yaml` defaults. No custom rules active in `a
 - ❌ **Don't split `main.dart`** without user request - single-file architecture is intentional
 - ❌ **Don't enable tap sounds** (`_tapClickSoundEnabled`) - user tested and disabled
 - ❌ **Don't remove audio session ambient config** - prevents Android notification spam
-- ❌ **Don't modify version** without updating both `pubspec.yaml` locations (version name + code)
+- ❌ **Don't modify version** without updating `pubspec.yaml` (both version name and build number)
+- ❌ **Don't use `flutter clean` casually** - breaks audio asset loading, requires `flutter pub get`
 
 ## External Integrations
 - **UPI Payment**: `upi://pay?pa=6472084641@icici&pn=MantraMala&cu=INR`
