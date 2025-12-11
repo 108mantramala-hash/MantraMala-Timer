@@ -424,10 +424,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                   const SizedBox(height: 12),
                   ShaderMask(
                     shaderCallback: (bounds) => LinearGradient(
-                      colors: [
-                        Color(0xFFD6A54B),
-                        Color(0xFFF8F5F0),
-                      ],
+                      colors: [Color(0xFFD6A54B), Color(0xFFF8F5F0)],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ).createShader(bounds),
@@ -446,10 +443,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                   const SizedBox(height: 8),
                   ShaderMask(
                     shaderCallback: (bounds) => LinearGradient(
-                      colors: [
-                        Color(0xFFFFD96A),
-                        Color(0xFFD6A54B),
-                      ],
+                      colors: [Color(0xFFFFD96A), Color(0xFFD6A54B)],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ).createShader(bounds),
@@ -1304,13 +1298,9 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      const Color(
-                        0xFFFFD96A,
-                      ).withValues(alpha: 0.2),
+                      const Color(0xFFFFD96A).withValues(alpha: 0.2),
                       Colors.transparent,
-                      const Color(
-                        0xFFFFD96A,
-                      ).withValues(alpha: 0.1),
+                      const Color(0xFFFFD96A).withValues(alpha: 0.1),
                     ],
                     stops: const [0.0, 0.5, 1.0],
                   ),
@@ -1886,7 +1876,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Switch(
                     value: false,
                     onChanged: (v) async {
-                      // Show confirmation dialog
+                      // Show premium confirmation dialog
                       final confirmed = await showDialog<bool>(
                         context: context,
                         builder: (context) => AlertDialog(
@@ -1894,35 +1884,130 @@ class _SettingsPageState extends State<SettingsPage> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          title: const Text(
-                            "Reset Total Count?",
-                            style: TextStyle(color: Color(0xFFFFD96A)),
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            24,
+                            28,
+                            24,
+                            18,
                           ),
-                          content: Text(
-                            "This will reset your lifetime mantra count to 0. This action cannot be undone.",
-                            style: TextStyle(
-                              color: const Color(
-                                0xFFF8F5F0,
-                              ).withValues(alpha: 0.9),
-                            ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              ShaderMask(
+                                shaderCallback: (bounds) => LinearGradient(
+                                  colors: [
+                                    Color(0xFFD6A54B),
+                                    Color(0xFFFFD96A),
+                                  ],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ).createShader(bounds),
+                                child: const Text(
+                                  "Reset Total Count?",
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    fontFamily: 'Montserrat',
+                                    color: Colors.white,
+                                    letterSpacing: 1.3,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ShaderMask(
+                                shaderCallback: (bounds) => LinearGradient(
+                                  colors: [
+                                    Color(0xFFD6A54B),
+                                    Color(0xFFFFD96A),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ).createShader(bounds),
+                                child: const Text(
+                                  "This will reset your lifetime mantra count to 0.\nThis action cannot be undone.",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'Montserrat',
+                                    color: Colors.white,
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  Expanded(
+                                    child: TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(false),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
+                                      ),
+                                      child: ShaderMask(
+                                        shaderCallback: (bounds) =>
+                                            LinearGradient(
+                                              colors: [
+                                                Color(0xFFD6A54B),
+                                                Color(0xFFFFD96A),
+                                              ],
+                                              begin: Alignment.centerLeft,
+                                              end: Alignment.centerRight,
+                                            ).createShader(bounds),
+                                        child: const Text(
+                                          "Cancel",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'Montserrat',
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(true),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
+                                      ),
+                                      child: ShaderMask(
+                                        shaderCallback: (bounds) =>
+                                            LinearGradient(
+                                              colors: [
+                                                Color(0xFFD6A54B),
+                                                Color(0xFFFFD96A),
+                                              ],
+                                              begin: Alignment.centerLeft,
+                                              end: Alignment.centerRight,
+                                            ).createShader(bounds),
+                                        child: const Text(
+                                          "Reset",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'Montserrat',
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(false),
-                              child: const Text(
-                                "Cancel",
-                                style: TextStyle(color: Color(0xFFA0A0A8)),
-                              ),
-                            ),
-                            ElevatedButton(
-                              onPressed: () => Navigator.of(context).pop(true),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFFFD96A),
-                                foregroundColor: const Color(0xFF1C1E3A),
-                              ),
-                              child: const Text("Reset"),
-                            ),
-                          ],
                         ),
                       );
 
@@ -1930,11 +2015,28 @@ class _SettingsPageState extends State<SettingsPage> {
                         await widget.onResetTotalMantras();
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                "Total mantras count has been reset",
+                            SnackBar(
+                              backgroundColor: const Color(0xFF2A2C48),
+                              content: ShaderMask(
+                                shaderCallback: (bounds) => LinearGradient(
+                                  colors: [
+                                    Color(0xFFD6A54B),
+                                    Color(0xFFFFD96A),
+                                  ],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ).createShader(bounds),
+                                child: const Text(
+                                  "Total mantras count has been reset",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Montserrat',
+                                    fontSize: 15,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
-                              duration: Duration(seconds: 2),
+                              duration: const Duration(seconds: 2),
                             ),
                           );
                         }
@@ -1962,33 +2064,89 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
               const SizedBox(height: 8),
-              ShaderMask(
-                shaderCallback: (bounds) => LinearGradient(
-                  colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ).createShader(bounds),
-                child: const Text(
-                  "Volume",
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Montserrat',
-                    color: Colors.white,
-                    letterSpacing: 1.1,
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8.0,
+                  horizontal: 2.0,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF23254A),
+                    borderRadius: BorderRadius.circular(12.0),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.10),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8.0,
+                      horizontal: 12.0,
+                    ),
+                    child: Row(
+                      children: [
+                        ShaderMask(
+                          shaderCallback: (Rect bounds) {
+                            return LinearGradient(
+                              colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ).createShader(bounds);
+                          },
+                          child: const Icon(
+                            Icons.volume_up,
+                            size: 22,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ShaderMask(
+                                shaderCallback: (bounds) => LinearGradient(
+                                  colors: [
+                                    Color(0xFFD6A54B),
+                                    Color(0xFFFFD96A),
+                                  ],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ).createShader(bounds),
+                                child: const Text(
+                                  "Volume",
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Montserrat',
+                                    color: Colors.white,
+                                    letterSpacing: 1.1,
+                                  ),
+                                ),
+                              ),
+                              Slider(
+                                value: _volume,
+                                min: 0.0,
+                                max: 1.0,
+                                divisions: 10,
+                                label: (_volume * 100).round().toString(),
+                                onChanged: (v) {
+                                  setState(() => _volume = v);
+                                  _autoSave();
+                                },
+                                activeColor: const Color(0xFFD6A54B),
+                                inactiveColor: const Color(0xFF44465C),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              Slider(
-                value: _volume,
-                min: 0.0,
-                max: 1.0,
-                divisions: 10,
-                label: (_volume * 100).round().toString(),
-                onChanged: (v) {
-                  setState(() => _volume = v);
-                  _autoSave();
-                },
               ),
               const SizedBox(height: 6),
               Center(
