@@ -67,7 +67,7 @@ flutter:
   assets:
     - assets/sounds/tab.mp3
     - assets/sounds/Bell.mp3
-    - assets/logo/logo.png
+    - assets/logo/logo1.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -99,12 +99,9 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logo/logo.png"
+  image_path: "assets/logo/logo1.png"
   min_sdk_android: 21
-  # Optionally remove old launcher icon
   remove_alpha_ios: true
-  # Enable adaptive icons for Android (full bleed, edge-to-edge)
   adaptive_icon_background: "#000000"
-  adaptive_icon_foreground: "assets/logo/logo.png"
-  # Keep the logo fully visible with proper padding
+  adaptive_icon_foreground: "assets/logo/logo1.png"
   adaptive_icon_foreground_inset: 16
