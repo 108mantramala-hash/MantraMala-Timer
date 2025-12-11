@@ -391,27 +391,79 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                       const Icon(
                         Icons.emoji_events,
                         color: Color(0xFFD6A54B),
-                        size: 32,
+                        size: 28,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Expanded(
-                        child: Text(
-                          "Session Complete",
-                          style: Theme.of(ctx).textTheme.displayMedium
-                              ?.copyWith(color: const Color(0xFFD6A54B)),
+                        child: ShaderMask(
+                          shaderCallback: (bounds) => LinearGradient(
+                            colors: [
+                              Color(0xFFD6A54B), // gold
+                              Color(0xFFFFD96A), // shiny highlight
+                              Color(0xFFF8F5F0), // off-white
+                            ],
+                            stops: [0.0, 0.7, 1.0],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ).createShader(bounds),
+                          child: const Text(
+                            "Session Complete",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                              fontFamily: 'Montserrat',
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    "You reached $_targetCount mantras.",
-                    style: Theme.of(ctx).textTheme.bodyLarge,
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [
+                        Color(0xFFD6A54B),
+                        Color(0xFFF8F5F0),
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ).createShader(bounds),
+                    child: Text(
+                      "You reached $_targetCount mantras.",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'Montserrat',
+                        color: Colors.white,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    "Total mantras: $_totalMantras",
-                    style: Theme.of(ctx).textTheme.bodyMedium,
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [
+                        Color(0xFFFFD96A),
+                        Color(0xFFD6A54B),
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ).createShader(bounds),
+                    child: Text(
+                      "Total mantras: $_totalMantras",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        fontFamily: 'Montserrat',
+                        color: Colors.white,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 20),
                   Row(
@@ -517,25 +569,49 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
           title: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
-                  colors: [
-                    Color(0xFFD6A54B),
-                    Color(0xFFF8F5F0),
-                    Color(0xFFD6A54B),
-                  ],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ).createShader(bounds),
-                child: const Text(
-                  'MantraMala',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                    color: Colors.white,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [
+                        Color(0xFFD6A54B), // rich gold
+                        Color(0xFFF8E16C), // shiny highlight
+                        Color(0xFFB6862C), // deep gold
+                      ],
+                      stops: [0.0, 0.5, 1.0],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ).createShader(bounds),
+                    child: const Icon(
+                      Icons.hourglass_empty,
+                      size: 32,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 4),
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [
+                        Color(0xFFD6A54B),
+                        Color(0xFFF8F5F0),
+                        Color(0xFFD6A54B),
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ).createShader(bounds),
+                    child: const Text(
+                      'MantraMala',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 2),
               const Text(
@@ -1573,15 +1649,23 @@ class _SettingsPageState extends State<SettingsPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "Scroll the wheels to set your daily target",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: const Color(0xFFFFD96A).withOpacity(0.95),
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.2,
+              ShaderMask(
+                shaderCallback: (bounds) => LinearGradient(
+                  colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ).createShader(bounds),
+                child: const Text(
+                  "Scroll the wheels to set your daily target",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Montserrat',
+                    color: Colors.white,
+                    letterSpacing: 1.1,
+                  ),
+                  textAlign: TextAlign.left,
                 ),
-                textAlign: TextAlign.left,
               ),
               const SizedBox(height: 12),
               // Rolling Number Picker (Slot Machine Style)
@@ -1673,12 +1757,21 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 16),
               // Timer Interval Selector
-              Text(
-                "Timer Interval",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: const Color(0xFFFFD96A).withValues(alpha: 0.9),
-                  fontWeight: FontWeight.bold,
+              ShaderMask(
+                shaderCallback: (bounds) => LinearGradient(
+                  colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ).createShader(bounds),
+                child: const Text(
+                  "Timer Interval",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Montserrat',
+                    color: Colors.white,
+                    letterSpacing: 1.1,
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
@@ -1767,7 +1860,23 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                   const SizedBox(width: 8),
-                  const Text("Enable Sound"),
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ).createShader(bounds),
+                    child: const Text(
+                      "Enable Sound",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Montserrat',
+                        color: Colors.white,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               // Removed 'Tap Anywhere to Count' button
@@ -1833,11 +1942,43 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                   const SizedBox(width: 8),
-                  const Text("Reset Total Count"),
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [Color(0xFFFFD96A), Color(0xFFD6A54B)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ).createShader(bounds),
+                    child: const Text(
+                      "Reset Total Count",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Montserrat',
+                        color: Colors.white,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text("Volume", style: Theme.of(context).textTheme.bodyMedium),
+              ShaderMask(
+                shaderCallback: (bounds) => LinearGradient(
+                  colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ).createShader(bounds),
+                child: const Text(
+                  "Volume",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Montserrat',
+                    color: Colors.white,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+              ),
               Slider(
                 value: _volume,
                 min: 0.0,
