@@ -1,4 +1,4 @@
-package com.mantramala.app
+package com.mantramala.timer
 
 import io.flutter.embedding.android.FlutterActivity
 import android.os.Bundle
