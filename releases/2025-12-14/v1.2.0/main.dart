@@ -63,7 +63,7 @@ class ChantSpeedSheet extends StatefulWidget {
 }
 
 class _ChantSpeedSheetState extends State<ChantSpeedSheet> {
-  List<DateTime> _tapTimes = [];
+  final List<DateTime> _tapTimes = [];
   int? _roundedSeconds;
 
   @override

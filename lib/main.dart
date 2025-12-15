@@ -7,8 +7,6 @@ import "package:in_app_review/in_app_review.dart";
 import "dart:math" as math;
 import "dart:async";
 import "package:url_launcher/url_launcher.dart";
-import 'package:permission_handler/permission_handler.dart';
-import 'package:noise_meter/noise_meter.dart';
 
 // --- Chant Speed Estimator ---
 
@@ -2132,141 +2130,117 @@ class _SettingsPageState extends State<SettingsPage> {
                   Switch(
                     value: false,
                     onChanged: (v) async {
-                      // Show premium confirmation dialog
-                      final confirmed = await showDialog<bool>(
+                      final confirmed = await showModalBottomSheet<bool>(
                         context: context,
-                        builder: (context) => AlertDialog(
-                          backgroundColor: const Color(0xFF2A2C48),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          contentPadding: const EdgeInsets.fromLTRB(
-                            24,
-                            28,
-                            24,
-                            18,
-                          ),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              ShaderMask(
-                                shaderCallback: (bounds) => LinearGradient(
-                                  colors: [
-                                    Color(0xFFD6A54B),
-                                    Color(0xFFFFD96A),
-                                  ],
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                ).createShader(bounds),
-                                child: const Text(
-                                  "Reset Total Count?",
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w900,
-                                    fontFamily: 'Montserrat',
-                                    color: Colors.white,
-                                    letterSpacing: 1.3,
+                        isScrollControlled: true,
+                        backgroundColor: const Color(0xFF2A2C48),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                        ),
+                        builder: (context) => SafeArea(
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              left: 20,
+                              right: 20,
+                              top: 20,
+                              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 50,
+                                  height: 5,
+                                  margin: const EdgeInsets.only(bottom: 18),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFD96A).withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 16),
-                              ShaderMask(
-                                shaderCallback: (bounds) => LinearGradient(
-                                  colors: [
-                                    Color(0xFFD6A54B),
-                                    Color(0xFFFFD96A),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ).createShader(bounds),
-                                child: const Text(
+                                ShaderMask(
+                                  shaderCallback: (bounds) => const LinearGradient(
+                                    colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  ).createShader(bounds),
+                                  child: const Text(
+                                    "Reset Total Count?",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'Montserrat',
+                                      color: Colors.white,
+                                      letterSpacing: 1.2,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
                                   "This will reset your lifetime mantra count to 0.\nThis action cannot be undone.",
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 15.5,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w500,
                                     fontFamily: 'Montserrat',
-                                    color: Colors.white,
+                                    color: Color(0xFFF8F5F0),
                                     height: 1.5,
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 24),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  Expanded(
-                                    child: TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(false),
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 12,
+                                const SizedBox(height: 26),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: () => Navigator.of(context).pop(false),
+                                        style: OutlinedButton.styleFrom(
+                                          side: const BorderSide(color: Color(0xFFD6A54B), width: 1.2),
+                                          foregroundColor: const Color(0xFFD6A54B),
+                                          padding: const EdgeInsets.symmetric(vertical: 14),
                                         ),
-                                      ),
-                                      child: ShaderMask(
-                                        shaderCallback: (bounds) =>
-                                            LinearGradient(
-                                              colors: [
-                                                Color(0xFFD6A54B),
-                                                Color(0xFFFFD96A),
-                                              ],
-                                              begin: Alignment.centerLeft,
-                                              end: Alignment.centerRight,
-                                            ).createShader(bounds),
                                         child: const Text(
                                           "Cancel",
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontFamily: 'Montserrat',
-                                            color: Colors.white,
                                             fontSize: 15,
+                                            color: Color(0xFFD6A54B),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(true),
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 12,
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: () => Navigator.of(context).pop(true),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFD6A54B),
+                                          foregroundColor: const Color(0xFF1C1E3A),
+                                          padding: const EdgeInsets.symmetric(vertical: 14),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
                                         ),
-                                      ),
-                                      child: ShaderMask(
-                                        shaderCallback: (bounds) =>
-                                            LinearGradient(
-                                              colors: [
-                                                Color(0xFFD6A54B),
-                                                Color(0xFFFFD96A),
-                                              ],
-                                              begin: Alignment.centerLeft,
-                                              end: Alignment.centerRight,
-                                            ).createShader(bounds),
                                         child: const Text(
                                           "Reset",
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontFamily: 'Montserrat',
-                                            color: Colors.white,
                                             fontSize: 15,
+                                            color: Color(0xFF1C1E3A),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                            ),
                           ),
                         ),
                       );
-
                       if (confirmed == true) {
                         await widget.onResetTotalMantras();
                         if (mounted) {
@@ -2274,11 +2248,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             SnackBar(
                               backgroundColor: const Color(0xFF2A2C48),
                               content: ShaderMask(
-                                shaderCallback: (bounds) => LinearGradient(
-                                  colors: [
-                                    Color(0xFFD6A54B),
-                                    Color(0xFFFFD96A),
-                                  ],
+                                shaderCallback: (bounds) => const LinearGradient(
+                                  colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
                                   begin: Alignment.centerLeft,
                                   end: Alignment.centerRight,
                                 ).createShader(bounds),
@@ -2301,7 +2272,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(width: 8),
                   ShaderMask(
-                    shaderCallback: (bounds) => LinearGradient(
+                    shaderCallback: (bounds) => const LinearGradient(
                       colors: [Color(0xFFFFD96A), Color(0xFFD6A54B)],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
