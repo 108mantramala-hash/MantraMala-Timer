@@ -63,7 +63,7 @@ class ChantSpeedSheet extends StatefulWidget {
 }
 
 class _ChantSpeedSheetState extends State<ChantSpeedSheet> {
-  List<DateTime> _tapTimes = [];
+  final List<DateTime> _tapTimes = [];
   int? _roundedSeconds;
 
   @override
@@ -456,25 +456,21 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
   Future<void> _playCompletionSound() async {
     if (!_soundEnabled) return;
     try {
-      // Stop the player first to ensure clean state
-      await _bellPlayer.stop();
-      // Seek to beginning
-      await _bellPlayer.seek(Duration.zero);
-      // Play the bell sound
-      await _bellPlayer.play();
-    } catch (e) {
-      // If playing fails, try to reload and play
-      try {
+      for (int i = 0; i < 3; i++) {
         await _bellPlayer.stop();
         await _bellPlayer.setAudioSource(
           AudioSource.asset("assets/sounds/Bell.mp3"),
         );
-        // Removed: setVolume
         await _bellPlayer.seek(Duration.zero);
         await _bellPlayer.play();
-      } catch (_) {
-        // Silently fail if sound playback fails
+        // Wait for the sound to finish or a fixed delay (e.g., 600ms)
+        await Future.any([
+          _bellPlayer.playerStateStream.firstWhere((state) => state.processingState == ProcessingState.completed),
+          Future.delayed(const Duration(milliseconds: 600)),
+        ]);
       }
+    } catch (_) {
+      // Silently fail if sound playback fails
     }
   }
 
