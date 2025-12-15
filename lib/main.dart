@@ -1348,16 +1348,25 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     )
-                  : const LinearGradient(
-                      colors: [
-                        Color(0xFFFFE55C),
-                        Color(0xFFE5B84D),
-                        Color(0xFFC4934D),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      stops: [0.0, 0.5, 1.0],
-                    ),
+                  : _isTimerRunning
+                      ? const LinearGradient(
+                          colors: [
+                            Color(0xFFC72C41), // Ruby red
+                            Color(0xFFB71C1C),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : const LinearGradient(
+                          colors: [
+                            Color(0xFFFFE55C),
+                            Color(0xFFE5B84D),
+                            Color(0xFFC4934D),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          stops: [0.0, 0.5, 1.0],
+                        ),
               boxShadow: _isCompleted
                   ? [
                       BoxShadow(
@@ -1367,20 +1376,35 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                         offset: const Offset(0, 2),
                       ),
                     ]
-                  : [
-                      BoxShadow(
-                        color: const Color(0xFFFFD96A).withValues(alpha: 0.7),
-                        blurRadius: 28,
-                        spreadRadius: 3,
-                        offset: const Offset(0, 10),
-                      ),
-                      BoxShadow(
-                        color: const Color(0xFFFFE55C).withValues(alpha: 0.4),
-                        blurRadius: 40,
-                        spreadRadius: -8,
-                        offset: const Offset(0, 0),
-                      ),
-                    ],
+                  : _isTimerRunning
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFFC72C41).withOpacity(0.4),
+                            blurRadius: 28,
+                            spreadRadius: 3,
+                            offset: const Offset(0, 10),
+                          ),
+                          BoxShadow(
+                            color: const Color(0xFFB71C1C).withOpacity(0.3),
+                            blurRadius: 40,
+                            spreadRadius: -8,
+                            offset: const Offset(0, 0),
+                          ),
+                        ]
+                      : [
+                          BoxShadow(
+                            color: const Color(0xFFFFD96A).withValues(alpha: 0.7),
+                            blurRadius: 28,
+                            spreadRadius: 3,
+                            offset: const Offset(0, 10),
+                          ),
+                          BoxShadow(
+                            color: const Color(0xFFFFE55C).withValues(alpha: 0.4),
+                            blurRadius: 40,
+                            spreadRadius: -8,
+                            offset: const Offset(0, 0),
+                          ),
+                        ],
               border: _isCompleted
                   ? Border.all(color: const Color(0xFF3A3C4E), width: 1.5)
                   : Border.all(
@@ -1393,15 +1417,25 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                 borderRadius: BorderRadius.circular(36),
                 gradient: _isCompleted
                     ? null
-                    : LinearGradient(
-                        colors: [
-                          Colors.white.withValues(alpha: 0.25),
-                          Colors.white.withValues(alpha: 0.05),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: const [0.0, 0.6],
-                      ),
+                    : _isTimerRunning
+                        ? LinearGradient(
+                            colors: [
+                              Colors.white.withOpacity(0.10),
+                              Colors.white.withOpacity(0.03),
+                            ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0.0, 0.6],
+                          )
+                        : LinearGradient(
+                            colors: [
+                              Colors.white.withValues(alpha: 0.25),
+                              Colors.white.withValues(alpha: 0.05),
+                            ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0.0, 0.6],
+                          ),
               ),
               child: Material(
                 color: Colors.transparent,
@@ -1419,7 +1453,9 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                           size: 28,
                           color: _isCompleted
                               ? const Color(0xFFA0A0A8)
-                              : const Color(0xFF1C1E3A),
+                              : _isTimerRunning
+                                  ? Colors.white
+                                  : const Color(0xFF1C1E3A),
                         ),
                         const SizedBox(width: 12),
                         ShaderMask(
@@ -1430,22 +1466,31 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                                     Color(0xFFA0A0A8),
                                   ],
                                 ).createShader(bounds)
-                              : const LinearGradient(
-                                  colors: [
-                                    Color(0xFF1C1E3A),
-                                    Color(0xFF0A0B1A),
-                                  ],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                ).createShader(bounds),
+                              : _isTimerRunning
+                                  ? const LinearGradient(
+                                      colors: [
+                                        Colors.white,
+                                        Color(0xFFFFE5E5),
+                                      ],
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                    ).createShader(bounds)
+                                  : const LinearGradient(
+                                      colors: [
+                                        Color(0xFF1C1E3A),
+                                        Color(0xFF0A0B1A),
+                                      ],
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                    ).createShader(bounds),
                           child: Text(
                             buttonText,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: _isTimerRunning ? Colors.white : Colors.white,
                               fontSize: 26,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.2,
-                              shadows: [
+                              shadows: const [
                                 Shadow(
                                   color: Color(0x60000000),
                                   blurRadius: 6,
