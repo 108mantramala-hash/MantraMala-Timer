@@ -7,6 +7,234 @@ import "package:in_app_review/in_app_review.dart";
 import "dart:math" as math;
 import "dart:async";
 import "package:url_launcher/url_launcher.dart";
+import 'package:permission_handler/permission_handler.dart';
+import 'package:noise_meter/noise_meter.dart';
+
+// --- Chant Speed Estimator ---
+
+class ChantSpeedEstimator {
+  final List<DateTime> _peaks = [];
+  final double threshold;
+  final int minIntervalMs;
+
+  ChantSpeedEstimator({this.threshold = 0.15, this.minIntervalMs = 200});
+
+  void addAmplitude(double amplitude) {
+    final now = DateTime.now();
+    if (amplitude > threshold) {
+      if (_peaks.isEmpty ||
+          now.difference(_peaks.last).inMilliseconds > minIntervalMs) {
+        _peaks.add(now);
+      }
+    }
+  }
+
+  double? getAverageIntervalSeconds() {
+    if (_peaks.length < 2) return null;
+    List<int> intervals = [];
+    for (int i = 1; i < _peaks.length; i++) {
+      intervals.add(_peaks[i].difference(_peaks[i - 1]).inMilliseconds);
+    }
+    if (intervals.isEmpty) return null;
+    return intervals.reduce((a, b) => a + b) / intervals.length / 1000.0;
+  }
+
+  int? getSuggestedInterval(List<int> supported) {
+    final avg = getAverageIntervalSeconds();
+    if (avg == null) return null;
+    return supported.reduce(
+      (a, b) => (avg - a).abs() < (avg - b).abs() ? a : b,
+    );
+  }
+
+  void reset() => _peaks.clear();
+}
+
+class ChantSpeedSheet extends StatefulWidget {
+  final List<int> supportedIntervals;
+  final void Function(int)? onApply;
+  const ChantSpeedSheet({
+    super.key,
+    required this.supportedIntervals,
+    this.onApply,
+  });
+  @override
+  State<ChantSpeedSheet> createState() => _ChantSpeedSheetState();
+}
+
+class _ChantSpeedSheetState extends State<ChantSpeedSheet> {
+  List<DateTime> _tapTimes = [];
+  int? _roundedSeconds;
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  void _onTap() {
+    setState(() {
+      _tapTimes.add(DateTime.now());
+      if (_tapTimes.length >= 3) {
+        List<int> intervals = [];
+        for (int i = 1; i < _tapTimes.length; i++) {
+          intervals.add(_tapTimes[i].difference(_tapTimes[i - 1]).inMilliseconds);
+        }
+        if (intervals.isNotEmpty) {
+          double avg = intervals.reduce((a, b) => a + b) / intervals.length / 1000.0;
+          int rounded = avg < 1.0 ? 1 : avg.ceil();
+          _roundedSeconds = rounded;
+        }
+      }
+    });
+  }
+
+  void _reset() {
+    setState(() {
+      _tapTimes.clear();
+      _roundedSeconds = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canApply = _roundedSeconds != null && _tapTimes.length >= 3;
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1E3A),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 50,
+            height: 5,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFD96A).withOpacity(0.3),
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          const SizedBox(height: 18),
+          ShaderMask(
+            shaderCallback: (bounds) => const LinearGradient(
+              colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
+            ).createShader(bounds),
+            child: const Text(
+              "Measure Chant Speed",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontFamily: 'Montserrat',
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Tap the button below each time you finish a mantra (at least 3 times).",
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 15, color: Color(0xFFF8F5F0)),
+          ),
+          const SizedBox(height: 18),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFD96A),
+              foregroundColor: const Color(0xFF1C1E3A),
+              minimumSize: const Size(160, 60),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            onPressed: _onTap,
+            child: const Text("Tap Here"),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            _tapTimes.length < 3
+                ? "Taps: ${_tapTimes.length}"
+                : "Average: ${_roundedSeconds ?? '-'} s per mantra",
+            style: const TextStyle(fontSize: 16, color: Color(0xFFF8F5F0)),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton(
+                onPressed: _reset,
+                child: const Text("Reset"),
+              ),
+              const SizedBox(width: 16),
+              if (canApply)
+                ElevatedButton(
+                  onPressed: () {
+                    widget.onApply?.call(_roundedSeconds!);
+                    Navigator.of(context).pop();
+                  },
+                  child: Text("Apply ${_roundedSeconds!}s"),
+                ),
+              const SizedBox(width: 16),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text("Close"),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AnimatedPulseDot extends StatefulWidget {
+  const AnimatedPulseDot({super.key});
+
+  @override
+  State<AnimatedPulseDot> createState() => _AnimatedPulseDotState();
+}
+
+class _AnimatedPulseDotState extends State<AnimatedPulseDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) => Container(
+        width: 24 + 8 * _controller.value,
+        height: 24 + 8 * _controller.value,
+        decoration: BoxDecoration(
+          color: const Color(
+            0xFFFFD96A,
+          ).withOpacity(0.7 - 0.3 * _controller.value),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFD96A).withOpacity(0.3),
+              blurRadius: 12 * _controller.value,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 void main() {
   runApp(const MantraMalaApp());
@@ -63,7 +291,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
   Timer? _completionSoundTimer;
   Timer? _completionSoundStopTimer;
   int _totalMantras = 0; // All-time mantra count
-  double _volume = 0.8; // 0.0 - 1.0
+  // double _volume = 0.8; // Removed: volume control
   bool _soundEnabled = true;
   bool _hapticsEnabled = true;
   bool _tapAnywhere = false;
@@ -122,8 +350,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
       await _bellPlayer
           .setAudioSource(AudioSource.asset("assets/sounds/Bell.mp3"))
           .catchError((_) => Duration.zero);
-      await _tapPlayer.setVolume(_volume);
-      await _bellPlayer.setVolume(_volume);
+      // Removed: setVolume
     } catch (_) {}
   }
 
@@ -147,7 +374,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
       _targetCount = _prefs.getInt("targetCount") ?? 108;
       _isCompleted = _prefs.getBool("isCompleted") ?? false;
       _totalMantras = _prefs.getInt("totalMantras") ?? 0;
-      _volume = _prefs.getDouble("volume") ?? 0.8;
+      // Removed: volume load
       _soundEnabled = _prefs.getBool("soundEnabled") ?? true;
       _hapticsEnabled = _prefs.getBool("hapticsEnabled") ?? true;
       _tapAnywhere = _prefs.getBool("tapAnywhere") ?? false;
@@ -160,10 +387,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
         _targetCount = _defaultTarget;
       }
     });
-    try {
-      await _tapPlayer.setVolume(_volume);
-      await _bellPlayer.setVolume(_volume);
-    } catch (_) {}
+    // Removed: setVolume
   }
 
   Future<void> _saveData() async {
@@ -171,7 +395,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
     await _prefs.setInt("targetCount", _targetCount);
     await _prefs.setBool("isCompleted", _isCompleted);
     await _prefs.setInt("totalMantras", _totalMantras);
-    await _prefs.setDouble("volume", _volume);
+    // Removed: save volume
     await _prefs.setBool("soundEnabled", _soundEnabled);
     await _prefs.setBool("hapticsEnabled", _hapticsEnabled);
     await _prefs.setBool("tapAnywhere", _tapAnywhere);
@@ -245,7 +469,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
         await _bellPlayer.setAudioSource(
           AudioSource.asset("assets/sounds/Bell.mp3"),
         );
-        await _bellPlayer.setVolume(_volume);
+        // Removed: setVolume
         await _bellPlayer.seek(Duration.zero);
         await _bellPlayer.play();
       } catch (_) {
@@ -630,7 +854,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                 await Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => SettingsPage(
-                      volume: _volume,
+                      // volume removed
                       soundEnabled: _soundEnabled,
                       hapticsEnabled: _hapticsEnabled,
                       tapAnywhere: _tapAnywhere,
@@ -638,7 +862,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                       intervalSeconds: _intervalSeconds,
                       onChanged: (s) async {
                         setState(() {
-                          _volume = s.volume;
+                          // _volume removed
                           _soundEnabled = s.soundEnabled;
                           _hapticsEnabled = s.hapticsEnabled;
                           _tapAnywhere = s.tapAnywhere;
@@ -648,8 +872,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                           _targetCount = _defaultTarget;
                         });
                         try {
-                          await _tapPlayer.setVolume(_volume);
-                          await _bellPlayer.setVolume(_volume);
+                          // setVolume removed
                         } catch (_) {}
                         _saveData();
                       },
@@ -1372,7 +1595,6 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
 }
 
 class SettingsData {
-  final double volume;
   final bool soundEnabled;
   final bool hapticsEnabled;
   final bool tapAnywhere;
@@ -1380,7 +1602,6 @@ class SettingsData {
   final double intervalSeconds;
 
   const SettingsData({
-    required this.volume,
     required this.soundEnabled,
     required this.hapticsEnabled,
     required this.tapAnywhere,
@@ -1390,7 +1611,6 @@ class SettingsData {
 }
 
 class SettingsPage extends StatefulWidget {
-  final double volume;
   final bool soundEnabled;
   final bool hapticsEnabled;
   final bool tapAnywhere;
@@ -1402,7 +1622,6 @@ class SettingsPage extends StatefulWidget {
 
   const SettingsPage({
     super.key,
-    required this.volume,
     required this.soundEnabled,
     required this.hapticsEnabled,
     required this.tapAnywhere,
@@ -1418,7 +1637,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  late double _volume;
   late bool _soundEnabled;
   late bool _hapticsEnabled;
   late bool _tapAnywhere;
@@ -1432,7 +1650,6 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    _volume = widget.volume;
     _soundEnabled = widget.soundEnabled;
     _hapticsEnabled = widget.hapticsEnabled;
     _tapAnywhere = widget.tapAnywhere;
@@ -1481,7 +1698,6 @@ class _SettingsPageState extends State<SettingsPage> {
   void _autoSave() {
     widget.onChanged(
       SettingsData(
-        volume: _volume,
         soundEnabled: _soundEnabled,
         hapticsEnabled: _hapticsEnabled,
         tapAnywhere: _tapAnywhere,
@@ -1806,6 +2022,50 @@ class _SettingsPageState extends State<SettingsPage> {
                         _buildIntervalChip(60),
                       ],
                     ),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: () => showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => ChantSpeedSheet(
+                          supportedIntervals: [1, 2, 3, 4, 5, 10, 15, 30, 60],
+                          onApply: (val) {
+                            setState(() => _intervalSeconds = val.toDouble());
+                            _autoSave();
+                          },
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          ShaderMask(
+                            shaderCallback: (bounds) => const LinearGradient(
+                              colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
+                            ).createShader(bounds),
+                            child: const Text(
+                              '🎧 Measure My Chant Speed',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: Colors.white,
+                                fontFamily: 'Montserrat',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "Chant naturally for a few rounds — we’ll suggest the best timer.",
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: const Color(0xFFA0A0A8).withOpacity(0.85),
+                              fontStyle: FontStyle.italic,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -2064,90 +2324,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
               const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 8.0,
-                  horizontal: 2.0,
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF23254A),
-                    borderRadius: BorderRadius.circular(12.0),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.10),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8.0,
-                      horizontal: 12.0,
-                    ),
-                    child: Row(
-                      children: [
-                        ShaderMask(
-                          shaderCallback: (Rect bounds) {
-                            return LinearGradient(
-                              colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ).createShader(bounds);
-                          },
-                          child: const Icon(
-                            Icons.volume_up,
-                            size: 22,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ShaderMask(
-                                shaderCallback: (bounds) => LinearGradient(
-                                  colors: [
-                                    Color(0xFFD6A54B),
-                                    Color(0xFFFFD96A),
-                                  ],
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                ).createShader(bounds),
-                                child: const Text(
-                                  "Volume",
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    fontFamily: 'Montserrat',
-                                    color: Colors.white,
-                                    letterSpacing: 1.1,
-                                  ),
-                                ),
-                              ),
-                              Slider(
-                                value: _volume,
-                                min: 0.0,
-                                max: 1.0,
-                                divisions: 10,
-                                label: (_volume * 100).round().toString(),
-                                onChanged: (v) {
-                                  setState(() => _volume = v);
-                                  _autoSave();
-                                },
-                                activeColor: const Color(0xFFD6A54B),
-                                inactiveColor: const Color(0xFF44465C),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              // Volume bar removed
               const SizedBox(height: 6),
               Center(
                 child: Text(
@@ -2326,34 +2503,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ),
                     const SizedBox(height: 36),
-                    // India UPI Button with premium styling
-                    _buildPremiumDonationButton(
-                      context: context,
-                      title: "Support from India 🇮🇳",
-                      emoji: "",
-                      onTap: () async {
-                        final upiUrl = Uri.parse(
-                          'upi://pay?pa=6472084641@icici&pn=MantraMala&cu=INR',
-                        );
-                        try {
-                          await launchUrl(
-                            upiUrl,
-                            mode: LaunchMode.externalApplication,
-                          );
-                        } catch (e) {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'No UPI app found. Please install Google Pay, PhonePe, or Paytm.',
-                              ),
-                              duration: Duration(seconds: 4),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 20),
+                    // (Removed: India UPI Button)
                     // Worldwide Ko-fi Button with premium styling
                     _buildPremiumDonationButton(
                       context: context,
