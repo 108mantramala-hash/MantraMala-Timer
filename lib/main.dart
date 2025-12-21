@@ -6,7 +6,7 @@ import "package:shared_preferences/shared_preferences.dart";
 import "package:in_app_review/in_app_review.dart";
 import "dart:math" as math;
 import "dart:async";
-import "package:url_launcher/url_launcher.dart";
+import 'utils/external_links.dart';
 import 'screens/onboarding_screen.dart';
 
 // --- Chant Speed Estimator ---
@@ -238,7 +238,6 @@ class _AnimatedPulseDotState extends State<AnimatedPulseDot>
   }
 }
 
-
 void main() {
   runApp(const MantraMalaApp());
 }
@@ -279,7 +278,7 @@ class MantraMalaApp extends StatelessWidget {
 
 /// AppRoot: Handles onboarding logic and initial navigation.
 class AppRoot extends StatefulWidget {
-  const AppRoot({Key? key}) : super(key: key);
+  const AppRoot({super.key});
 
   @override
   State<AppRoot> createState() => _AppRootState();
@@ -2585,7 +2584,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    // Title with gaming-quality text
+                    // Title
                     Text(
                       "Support the Journey 🙏",
                       textAlign: TextAlign.center,
@@ -2596,40 +2595,55 @@ class _SettingsPageState extends State<SettingsPage> {
                         letterSpacing: 1.2,
                         shadows: [
                           Shadow(
-                            color: const Color(
-                              0xFFFFD96A,
-                            ).withValues(alpha: 0.8),
-                            blurRadius: 20,
+                            color: const Color(0xFFFFD96A).withOpacity(0.7),
+                            blurRadius: 16, // reduced glow
                           ),
                           Shadow(
-                            color: const Color(
-                              0xFFD4AF37,
-                            ).withValues(alpha: 0.6),
+                            color: const Color(0xFFD4AF37).withOpacity(0.5),
                             offset: const Offset(0, 3),
-                            blurRadius: 10,
+                            blurRadius: 8,
                           ),
                           Shadow(
-                            color: Colors.black.withValues(alpha: 0.7),
+                            color: Colors.black.withOpacity(0.6),
                             offset: const Offset(0, 4),
-                            blurRadius: 8,
+                            blurRadius: 7,
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    // Body text with enhanced styling
+                    const SizedBox(height: 32),
+                    // Body text, now two paragraphs
                     Text(
-                      "Your contribution helps us maintain and improve MantraMala, keeping it free and ad-free for everyone. Every donation, big or small, supports our mission to provide a peaceful spiritual practice tool.",
+                      "Your support helps us maintain and improve MantraMala, keeping it free and ad-free for everyone.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 15.5,
                         fontWeight: FontWeight.w500,
-                        color: const Color(0xFFF8F5F0).withValues(alpha: 0.95),
+                        color: const Color(0xFFF8F5F0).withOpacity(0.95),
                         height: 1.6,
                         letterSpacing: 0.3,
                         shadows: [
                           Shadow(
-                            color: Colors.black.withValues(alpha: 0.4),
+                            color: Colors.black.withOpacity(0.4),
+                            offset: const Offset(0, 1),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      "Every contribution, big or small, supports our mission to offer a peaceful spiritual practice.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFFF8F5F0).withOpacity(0.85),
+                        height: 1.6,
+                        letterSpacing: 0.3,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.3),
                             offset: const Offset(0, 1),
                             blurRadius: 2,
                           ),
@@ -2639,36 +2653,42 @@ class _SettingsPageState extends State<SettingsPage> {
                     const SizedBox(height: 36),
                     // (Removed: India UPI Button)
                     // Worldwide Ko-fi Button with premium styling
-                    _buildPremiumDonationButton(
-                      context: context,
-                      title: "Support from Worldwide 🌍",
-                      emoji: "",
-                      onTap: () async {
-                        final kofiUrl = Uri.parse(
-                          'https://ko-fi.com/mantramala',
+                    StatefulBuilder(
+                      builder: (context, setState) {
+                        bool isLaunching = false;
+                        return _buildPremiumDonationButton(
+                          context: context,
+                          title: "Support the Journey 🌍",
+                          emoji: "",
+                          onTap: isLaunching
+                              ? () {}
+                              : () {
+                                  setState(() => isLaunching = true);
+                                  Navigator.of(context).pop();
+                                  openExternalUrl(
+                                    context,
+                                    'https://ko-fi.com/mantramala',
+                                  ).whenComplete(
+                                    () => setState(() => isLaunching = false),
+                                  );
+                                },
                         );
-                        try {
-                          final result = await launchUrl(
-                            kofiUrl,
-                            mode: LaunchMode.externalApplication,
-                          );
-                          if (!result) {
-                            throw Exception('Failed to launch URL');
-                          }
-                        } catch (e) {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Cannot open browser. Please try again later.',
-                              ),
-                              duration: Duration(seconds: 4),
-                            ),
-                          );
-                        }
                       },
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 10),
+                    // Calming reassurance line
+                    Text(
+                      "No pressure — your practice always comes first",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: const Color(0xFFF8F5F0).withOpacity(0.45),
+                        height: 1.4,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
                     // Footer text with enhanced styling
                     Text(
                       "Thank you for being part of this spiritual journey! 🙏✨",
@@ -2715,19 +2735,19 @@ class _SettingsPageState extends State<SettingsPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFFD96A).withValues(alpha: 0.3),
-            blurRadius: 15,
+            color: const Color(0xFFFFD96A).withOpacity(0.22), // reduced glow
+            blurRadius: 12,
             offset: const Offset(0, 6),
-            spreadRadius: 2,
+            spreadRadius: 1.5,
           ),
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 10,
+            color: Colors.black.withOpacity(0.45),
+            blurRadius: 8,
             offset: const Offset(0, 4),
           ),
         ],
         border: Border.all(
-          color: const Color(0xFFFFD96A).withValues(alpha: 0.4),
+          color: const Color(0xFFFFD96A).withOpacity(0.35),
           width: 2,
         ),
       ),
@@ -2736,7 +2756,7 @@ class _SettingsPageState extends State<SettingsPage> {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
-          splashColor: const Color(0xFFFFD96A).withValues(alpha: 0.2),
+          splashColor: const Color(0xFFFFD96A).withOpacity(0.18),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(
