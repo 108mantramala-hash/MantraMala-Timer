@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({Key? key}) : super(key: key);
+  const OnboardingScreen({super.key});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -18,19 +18,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _OnboardingPageData(
       icon: Icons.spa_rounded,
       title: 'Welcome to MantraMala Timer',
-      body: 'A calm, distraction-free timer for mantra chanting, japa, and mindful meditation.\n\nBuilt to help you stay focused — no ads, no noise, just presence.',
+      body:
+          'A calm, distraction-free timer for mantra chanting, japa, and mindful meditation.\n\nBuilt to help you stay focused — no ads, no noise, just presence.',
       cta: 'Begin Gently →',
     ),
     _OnboardingPageData(
       icon: Icons.timer_rounded,
       title: 'How it works',
-      body: '① Choose a session duration\n② Select your timer rhythm\n③ Start and chant mindfully\n\nA gentle alert guides you when your session completes.',
+      body:
+          '① Choose a session duration\n② Select your timer rhythm\n③ Start and chant mindfully\n\nA gentle alert guides you when your session completes.',
       cta: 'Continue',
     ),
     _OnboardingPageData(
       icon: Icons.self_improvement_rounded,
       title: 'Use it your way',
-      body: 'Practice japa, breath meditation, affirmations, or silent mindfulness — your way.\n\nAdjust rhythm, sound, and timing anytime — your practice evolves with you.',
+      body:
+          'Practice japa, breath meditation, affirmations, or silent mindfulness — your way.\n\nAdjust rhythm, sound, and timing anytime — your practice evolves with you.',
       cta: 'Start My First Session',
       helper: 'No sign-up required • Always free',
     ),
@@ -57,7 +60,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_currentPage == _pages.length - 1) {
       _finishOnboarding();
     } else {
-      _pageController.nextPage(duration: const Duration(milliseconds: 350), curve: Curves.ease);
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.ease,
+      );
     }
   }
 
@@ -85,20 +91,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   pageIndex: i,
                 ),
               ),
-              Positioned(
-                top: 0,
-                right: 0,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: TextButton(
-                    onPressed: _finishOnboarding,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white.withOpacity(0.65),
+              if (_currentPage < _pages.length - 1)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: TextButton(
+                      onPressed: () {
+                        if (_currentPage < _pages.length - 1) {
+                          _pageController.animateToPage(
+                            _currentPage + 1,
+                            duration: const Duration(milliseconds: 350),
+                            curve: Curves.ease,
+                          );
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white.withOpacity(0.65),
+                      ),
+                      child: const Text(
+                        'Skip',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
-                    child: const Text('Skip', style: TextStyle(fontWeight: FontWeight.w600)),
                   ),
                 ),
-              ),
               Positioned(
                 left: 0,
                 right: 0,
@@ -121,13 +139,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             backgroundColor: const Color(0xFFF6C453),
                             foregroundColor: Colors.black,
                             padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                             elevation: 4,
                           ),
                           onPressed: _onNext,
                           child: Text(
-                            _pages[_currentPage].cta ?? (_currentPage == _pages.length - 1 ? 'Start My First Session' : 'Continue'),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                            _pages[_currentPage].cta ??
+                                (_currentPage == _pages.length - 1
+                                    ? 'Start My First Session'
+                                    : 'Continue'),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
                           ),
                         ),
                       ),
@@ -163,20 +189,31 @@ class _OnboardingPageData {
   final String body;
   final String? cta;
   final String? helper;
-  const _OnboardingPageData({required this.icon, required this.title, required this.body, this.cta, this.helper});
+  const _OnboardingPageData({
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.cta,
+    this.helper,
+  });
 }
 
 class _OnboardingPage extends StatefulWidget {
   final _OnboardingPageData data;
   final bool animate;
   final int pageIndex;
-  const _OnboardingPage({required this.data, this.animate = false, required this.pageIndex});
+  const _OnboardingPage({
+    required this.data,
+    this.animate = false,
+    required this.pageIndex,
+  });
 
   @override
   State<_OnboardingPage> createState() => _OnboardingPageState();
 }
 
-class _OnboardingPageState extends State<_OnboardingPage> with SingleTickerProviderStateMixin {
+class _OnboardingPageState extends State<_OnboardingPage>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnim;
   late Animation<double> _scaleAnim;
@@ -189,7 +226,10 @@ class _OnboardingPageState extends State<_OnboardingPage> with SingleTickerProvi
       duration: const Duration(milliseconds: 700),
     );
     _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _scaleAnim = Tween<double>(begin: 0.85, end: 1.0).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
+    _scaleAnim = Tween<double>(
+      begin: 0.85,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _controller.forward();
     });
@@ -204,6 +244,7 @@ class _OnboardingPageState extends State<_OnboardingPage> with SingleTickerProvi
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isWelcome = widget.pageIndex == 0;
     final isHowItWorks = widget.pageIndex == 1;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 48.0),
@@ -211,61 +252,193 @@ class _OnboardingPageState extends State<_OnboardingPage> with SingleTickerProvi
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          FadeTransition(
-            opacity: _fadeAnim,
-            child: ScaleTransition(
-              scale: _scaleAnim,
-              child: _PremiumIcon(icon: widget.data.icon),
+          if (isWelcome)
+            FadeTransition(
+              opacity: _fadeAnim,
+              child: ScaleTransition(
+                scale: _scaleAnim,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFF6C453).withOpacity(0.25),
+                        blurRadius: 32,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(32),
+                    child: Image.asset(
+                      'assets/logo/logo1.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else if (widget.data.icon != null)
+            FadeTransition(
+              opacity: _fadeAnim,
+              child: ScaleTransition(
+                scale: _scaleAnim,
+                child: _PremiumIcon(icon: widget.data.icon!),
+              ),
             ),
-          ),
-          const SizedBox(height: 44),
+          const SizedBox(height: 36),
           ShaderMask(
             shaderCallback: (bounds) => const LinearGradient(
               colors: [Color(0xFFF6C453), Color(0xFFFFD96A)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ).createShader(bounds),
-            child: Text(
-              widget.data.title,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.displayMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                fontSize: 28,
-                letterSpacing: 0.5,
-                color: Colors.white,
-                fontFamily: 'Montserrat',
-                shadows: [
-                  Shadow(
-                    color: Colors.black.withOpacity(0.18),
-                    blurRadius: 8,
-                  ),
-                ],
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                widget.data.title,
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.displayMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 30,
+                  letterSpacing: 1.1,
+                  color: Colors.white,
+                  fontFamily: 'Montserrat',
+                  shadows: [
+                    Shadow(
+                      color: Colors.black.withOpacity(0.18),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 28),
-          isHowItWorks
-              ? _HowItWorksBody(text: widget.data.body)
-              : Text(
-                  widget.data.body,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: const Color(0xFFBFC3D9),
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    height: 1.6,
-                    fontFamily: 'Montserrat',
-                    letterSpacing: 0.1,
-                    shadows: [
-                      Shadow(
-                        color: Colors.black.withOpacity(0.10),
-                        blurRadius: 4,
-                      ),
-                    ],
-                  ),
+          if (isWelcome)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0, bottom: 18.0),
+              child: Text(
+                'Japa • Chant • Meditate',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFFF6C453),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  fontFamily: 'Montserrat',
+                  letterSpacing: 0.2,
                 ),
+              ),
+            ),
+          const SizedBox(height: 18),
+          if (isHowItWorks)
+            _HowItWorksSteps()
+          else
+            Text(
+              widget.data.body,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: const Color(0xFFBFC3D9),
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                height: 1.6,
+                fontFamily: 'Montserrat',
+                letterSpacing: 0.1,
+                shadows: [
+                  Shadow(color: Colors.black.withOpacity(0.10), blurRadius: 4),
+                ],
+              ),
+            ),
         ],
       ),
+    );
+  }
+}
+
+class _HowItWorksSteps extends StatelessWidget {
+  const _HowItWorksSteps();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const steps = [
+      'Choose a session duration',
+      'Select your timer rhythm',
+      'Start and chant mindfully',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < steps.length; i++)
+          Padding(
+            padding: EdgeInsets.only(bottom: i < steps.length - 1 ? 14 : 0),
+            child: NumberedStepRow(stepNumber: i + 1, text: steps[i]),
+          ),
+        const SizedBox(height: 18),
+        Text(
+          'A gentle alert guides you when your session completes.',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: const Color(0xFFBFC3D9),
+            fontSize: 17,
+            fontWeight: FontWeight.w400,
+            fontFamily: 'Montserrat',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class NumberedStepRow extends StatelessWidget {
+  final int stepNumber;
+  final String text;
+  const NumberedStepRow({required this.stepNumber, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF6C453),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFF6C453).withOpacity(0.25),
+                blurRadius: 6,
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '$stepNumber',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              fontFamily: 'Montserrat',
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: const Color(0xFFBFC3D9),
+              fontSize: 17,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'Montserrat',
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -331,7 +504,6 @@ class _HowItWorksBody extends StatelessWidget {
   }
 }
 
-
 class _PremiumIcon extends StatelessWidget {
   final IconData icon;
   const _PremiumIcon({required this.icon});
@@ -353,30 +525,31 @@ class _PremiumIcon extends StatelessWidget {
             offset: const Offset(0, 12),
           ),
         ],
-        border: Border.all(color: const Color(0xFFF6C453).withOpacity(0.22), width: 1.6),
+        border: Border.all(
+          color: const Color(0xFFF6C453).withOpacity(0.22),
+          width: 1.6,
+        ),
       ),
       padding: const EdgeInsets.all(32),
       child: Icon(
         icon,
         color: const Color(0xFFF6C453),
         size: 56,
-        shadows: [
-          Shadow(
-            color: Colors.black.withOpacity(0.18),
-            blurRadius: 8,
-          ),
-        ],
+        shadows: [Shadow(color: Colors.black.withOpacity(0.18), blurRadius: 8)],
       ),
     );
   }
 }
 
-
 class _PremiumDotsIndicator extends StatelessWidget {
   final int count;
   final int active;
   final Color color;
-  const _PremiumDotsIndicator({required this.count, required this.active, required this.color});
+  const _PremiumDotsIndicator({
+    required this.count,
+    required this.active,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
