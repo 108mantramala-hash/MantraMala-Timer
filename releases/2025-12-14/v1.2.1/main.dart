@@ -7,8 +7,6 @@ import "package:in_app_review/in_app_review.dart";
 import "dart:math" as math;
 import "dart:async";
 import "package:url_launcher/url_launcher.dart";
-import 'package:permission_handler/permission_handler.dart';
-import 'package:noise_meter/noise_meter.dart';
 
 // --- Chant Speed Estimator ---
 

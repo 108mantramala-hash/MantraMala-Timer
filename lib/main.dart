@@ -7,6 +7,7 @@ import "package:in_app_review/in_app_review.dart";
 import "dart:math" as math;
 import "dart:async";
 import "package:url_launcher/url_launcher.dart";
+import 'screens/onboarding_screen.dart';
 
 // --- Chant Speed Estimator ---
 
@@ -75,10 +76,13 @@ class _ChantSpeedSheetState extends State<ChantSpeedSheet> {
       if (_tapTimes.length >= 3) {
         List<int> intervals = [];
         for (int i = 1; i < _tapTimes.length; i++) {
-          intervals.add(_tapTimes[i].difference(_tapTimes[i - 1]).inMilliseconds);
+          intervals.add(
+            _tapTimes[i].difference(_tapTimes[i - 1]).inMilliseconds,
+          );
         }
         if (intervals.isNotEmpty) {
-          double avg = intervals.reduce((a, b) => a + b) / intervals.length / 1000.0;
+          double avg =
+              intervals.reduce((a, b) => a + b) / intervals.length / 1000.0;
           int rounded = avg < 1.0 ? 1 : avg.ceil();
           _roundedSeconds = rounded;
         }
@@ -143,7 +147,10 @@ class _ChantSpeedSheetState extends State<ChantSpeedSheet> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
-              textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              textStyle: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             onPressed: _onTap,
             child: const Text("Tap Here"),
@@ -159,10 +166,7 @@ class _ChantSpeedSheetState extends State<ChantSpeedSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ElevatedButton(
-                onPressed: _reset,
-                child: const Text("Reset"),
-              ),
+              ElevatedButton(onPressed: _reset, child: const Text("Reset")),
               const SizedBox(width: 16),
               if (canApply)
                 ElevatedButton(
@@ -234,6 +238,7 @@ class _AnimatedPulseDotState extends State<AnimatedPulseDot>
   }
 }
 
+
 void main() {
   runApp(const MantraMalaApp());
 }
@@ -267,8 +272,51 @@ class MantraMalaApp extends StatelessWidget {
           bodyMedium: TextStyle(color: Color(0xFFA0A0A8), fontSize: 16),
         ),
       ),
-      home: const MantraMalaHome(),
+      home: const AppRoot(),
     );
+  }
+}
+
+/// AppRoot: Handles onboarding logic and initial navigation.
+class AppRoot extends StatefulWidget {
+  const AppRoot({Key? key}) : super(key: key);
+
+  @override
+  State<AppRoot> createState() => _AppRootState();
+}
+
+class _AppRootState extends State<AppRoot> {
+  bool? _hasSeenOnboarding;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOnboardingFlag();
+  }
+
+  Future<void> _loadOnboardingFlag() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool('has_seen_onboarding') ?? false;
+    setState(() {
+      _hasSeenOnboarding = seen;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Show loading indicator while SharedPreferences loads
+    if (_hasSeenOnboarding == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0C1026),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFF6C453)),
+        ),
+      );
+    }
+    // Show onboarding if not seen, else HomeScreen
+    return _hasSeenOnboarding!
+        ? const MantraMalaHome()
+        : const OnboardingScreen();
   }
 }
 
@@ -463,7 +511,9 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
         await _bellPlayer.play();
         // Wait for the sound to finish or a fixed delay (e.g., 600ms)
         await Future.any([
-          _bellPlayer.playerStateStream.firstWhere((state) => state.processingState == ProcessingState.completed),
+          _bellPlayer.playerStateStream.firstWhere(
+            (state) => state.processingState == ProcessingState.completed,
+          ),
           Future.delayed(const Duration(milliseconds: 600)),
         ]);
       }
@@ -1290,6 +1340,7 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
       buttonIcon = Icons.play_circle_filled;
     }
 
+    final isResume = _currentCount > 0 && !_isTimerRunning && !_isCompleted;
     return Column(
       children: [
         // Interval display
@@ -1349,24 +1400,33 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                       end: Alignment.bottomRight,
                     )
                   : _isTimerRunning
-                      ? const LinearGradient(
-                          colors: [
-                            Color(0xFFC72C41), // Ruby red
-                            Color(0xFFB71C1C),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : const LinearGradient(
-                          colors: [
-                            Color(0xFFFFE55C),
-                            Color(0xFFE5B84D),
-                            Color(0xFFC4934D),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          stops: [0.0, 0.5, 1.0],
-                        ),
+                  ? const LinearGradient(
+                      colors: [
+                        Color(0xFFC72C41), // Ruby red
+                        Color(0xFFB71C1C),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : isResume
+                  ? const LinearGradient(
+                      colors: [
+                        Color(0xFF43EA7F), // Emerald
+                        Color(0xFF1DB954), // Spotify green
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : const LinearGradient(
+                      colors: [
+                        Color(0xFFFFE55C),
+                        Color(0xFFE5B84D),
+                        Color(0xFFC4934D),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      stops: [0.0, 0.5, 1.0],
+                    ),
               boxShadow: _isCompleted
                   ? [
                       BoxShadow(
@@ -1377,34 +1437,49 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                       ),
                     ]
                   : _isTimerRunning
-                      ? [
-                          BoxShadow(
-                            color: const Color(0xFFC72C41).withOpacity(0.4),
-                            blurRadius: 28,
-                            spreadRadius: 3,
-                            offset: const Offset(0, 10),
-                          ),
-                          BoxShadow(
-                            color: const Color(0xFFB71C1C).withOpacity(0.3),
-                            blurRadius: 40,
-                            spreadRadius: -8,
-                            offset: const Offset(0, 0),
-                          ),
-                        ]
-                      : [
-                          BoxShadow(
-                            color: const Color(0xFFFFD96A).withValues(alpha: 0.7),
-                            blurRadius: 28,
-                            spreadRadius: 3,
-                            offset: const Offset(0, 10),
-                          ),
-                          BoxShadow(
-                            color: const Color(0xFFFFE55C).withValues(alpha: 0.4),
-                            blurRadius: 40,
-                            spreadRadius: -8,
-                            offset: const Offset(0, 0),
-                          ),
-                        ],
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFC72C41).withOpacity(0.4),
+                        blurRadius: 28,
+                        spreadRadius: 3,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: const Color(0xFFB71C1C).withOpacity(0.3),
+                        blurRadius: 40,
+                        spreadRadius: -8,
+                        offset: const Offset(0, 0),
+                      ),
+                    ]
+                  : isResume
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF1DB954).withOpacity(0.3),
+                        blurRadius: 28,
+                        spreadRadius: 3,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: const Color(0xFF43EA7F).withOpacity(0.2),
+                        blurRadius: 40,
+                        spreadRadius: -8,
+                        offset: const Offset(0, 0),
+                      ),
+                    ]
+                  : [
+                      BoxShadow(
+                        color: const Color(0xFFFFD96A).withValues(alpha: 0.7),
+                        blurRadius: 28,
+                        spreadRadius: 3,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: const Color(0xFFFFE55C).withValues(alpha: 0.4),
+                        blurRadius: 40,
+                        spreadRadius: -8,
+                        offset: const Offset(0, 0),
+                      ),
+                    ],
               border: _isCompleted
                   ? Border.all(color: const Color(0xFF3A3C4E), width: 1.5)
                   : Border.all(
@@ -1418,24 +1493,34 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                 gradient: _isCompleted
                     ? null
                     : _isTimerRunning
-                        ? LinearGradient(
-                            colors: [
-                              Colors.white.withOpacity(0.10),
-                              Colors.white.withOpacity(0.03),
-                            ],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            stops: const [0.0, 0.6],
-                          )
-                        : LinearGradient(
-                            colors: [
-                              Colors.white.withValues(alpha: 0.25),
-                              Colors.white.withValues(alpha: 0.05),
-                            ],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            stops: const [0.0, 0.6],
-                          ),
+                    ? LinearGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.10),
+                          Colors.white.withOpacity(0.03),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.6],
+                      )
+                    : isResume
+                    ? LinearGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.18),
+                          Colors.white.withOpacity(0.04),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.6],
+                      )
+                    : LinearGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0.25),
+                          Colors.white.withValues(alpha: 0.05),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.6],
+                      ),
               ),
               child: Material(
                 color: Colors.transparent,
@@ -1454,8 +1539,10 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                           color: _isCompleted
                               ? const Color(0xFFA0A0A8)
                               : _isTimerRunning
-                                  ? Colors.white
-                                  : const Color(0xFF1C1E3A),
+                              ? Colors.white
+                              : isResume
+                              ? Colors.white
+                              : const Color(0xFF1C1E3A),
                         ),
                         const SizedBox(width: 12),
                         ShaderMask(
@@ -1467,26 +1554,31 @@ class _MantraMalaHomeState extends State<MantraMalaHome> {
                                   ],
                                 ).createShader(bounds)
                               : _isTimerRunning
-                                  ? const LinearGradient(
-                                      colors: [
-                                        Colors.white,
-                                        Color(0xFFFFE5E5),
-                                      ],
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                    ).createShader(bounds)
-                                  : const LinearGradient(
-                                      colors: [
-                                        Color(0xFF1C1E3A),
-                                        Color(0xFF0A0B1A),
-                                      ],
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                    ).createShader(bounds),
+                              ? const LinearGradient(
+                                  colors: [Colors.white, Color(0xFFFFE5E5)],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ).createShader(bounds)
+                              : isResume
+                              ? const LinearGradient(
+                                  colors: [Colors.white, Color(0xFFD0FFE0)],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ).createShader(bounds)
+                              : const LinearGradient(
+                                  colors: [
+                                    Color(0xFF1C1E3A),
+                                    Color(0xFF0A0B1A),
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ).createShader(bounds),
                           child: Text(
                             buttonText,
                             style: TextStyle(
-                              color: _isTimerRunning ? Colors.white : Colors.white,
+                              color: (isResume || _isTimerRunning)
+                                  ? Colors.white
+                                  : Colors.white,
                               fontSize: 26,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.2,
@@ -2180,7 +2272,9 @@ class _SettingsPageState extends State<SettingsPage> {
                         isScrollControlled: true,
                         backgroundColor: const Color(0xFF2A2C48),
                         shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(16),
+                          ),
                         ),
                         builder: (context) => SafeArea(
                           child: Padding(
@@ -2188,7 +2282,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               left: 20,
                               right: 20,
                               top: 20,
-                              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                              bottom:
+                                  MediaQuery.of(context).viewInsets.bottom + 20,
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -2199,16 +2294,22 @@ class _SettingsPageState extends State<SettingsPage> {
                                   height: 5,
                                   margin: const EdgeInsets.only(bottom: 18),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFFFD96A).withOpacity(0.3),
+                                    color: const Color(
+                                      0xFFFFD96A,
+                                    ).withOpacity(0.3),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
                                 ShaderMask(
-                                  shaderCallback: (bounds) => const LinearGradient(
-                                    colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                  ).createShader(bounds),
+                                  shaderCallback: (bounds) =>
+                                      const LinearGradient(
+                                        colors: [
+                                          Color(0xFFD6A54B),
+                                          Color(0xFFFFD96A),
+                                        ],
+                                        begin: Alignment.centerLeft,
+                                        end: Alignment.centerRight,
+                                      ).createShader(bounds),
                                   child: const Text(
                                     "Reset Total Count?",
                                     textAlign: TextAlign.center,
@@ -2238,11 +2339,19 @@ class _SettingsPageState extends State<SettingsPage> {
                                   children: [
                                     Expanded(
                                       child: OutlinedButton(
-                                        onPressed: () => Navigator.of(context).pop(false),
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(false),
                                         style: OutlinedButton.styleFrom(
-                                          side: const BorderSide(color: Color(0xFFD6A54B), width: 1.2),
-                                          foregroundColor: const Color(0xFFD6A54B),
-                                          padding: const EdgeInsets.symmetric(vertical: 14),
+                                          side: const BorderSide(
+                                            color: Color(0xFFD6A54B),
+                                            width: 1.2,
+                                          ),
+                                          foregroundColor: const Color(
+                                            0xFFD6A54B,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 14,
+                                          ),
                                         ),
                                         child: const Text(
                                           "Cancel",
@@ -2258,13 +2367,22 @@ class _SettingsPageState extends State<SettingsPage> {
                                     const SizedBox(width: 16),
                                     Expanded(
                                       child: ElevatedButton(
-                                        onPressed: () => Navigator.of(context).pop(true),
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(true),
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFD6A54B),
-                                          foregroundColor: const Color(0xFF1C1E3A),
-                                          padding: const EdgeInsets.symmetric(vertical: 14),
+                                          backgroundColor: const Color(
+                                            0xFFD6A54B,
+                                          ),
+                                          foregroundColor: const Color(
+                                            0xFF1C1E3A,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 14,
+                                          ),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                           ),
                                         ),
                                         child: const Text(
@@ -2293,11 +2411,15 @@ class _SettingsPageState extends State<SettingsPage> {
                             SnackBar(
                               backgroundColor: const Color(0xFF2A2C48),
                               content: ShaderMask(
-                                shaderCallback: (bounds) => const LinearGradient(
-                                  colors: [Color(0xFFD6A54B), Color(0xFFFFD96A)],
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                ).createShader(bounds),
+                                shaderCallback: (bounds) =>
+                                    const LinearGradient(
+                                      colors: [
+                                        Color(0xFFD6A54B),
+                                        Color(0xFFFFD96A),
+                                      ],
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                    ).createShader(bounds),
                                 child: const Text(
                                   "Total mantras count has been reset",
                                   style: TextStyle(
