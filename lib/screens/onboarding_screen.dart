@@ -280,12 +280,12 @@ class _OnboardingPageState extends State<_OnboardingPage>
                 ),
               ),
             )
-          else if (widget.data.icon != null)
+          else
             FadeTransition(
               opacity: _fadeAnim,
               child: ScaleTransition(
                 scale: _scaleAnim,
-                child: _PremiumIcon(icon: widget.data.icon!),
+                child: _PremiumIcon(icon: widget.data.icon),
               ),
             ),
           const SizedBox(height: 36),
@@ -443,66 +443,6 @@ class NumberedStepRow extends StatelessWidget {
   }
 }
 
-class _HowItWorksBody extends StatelessWidget {
-  final String text;
-  const _HowItWorksBody({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final lines = text.split('\n');
-    return Column(
-      children: [
-        for (var i = 0; i < 3; i++)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2.5),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ShaderMask(
-                  shaderCallback: (bounds) => const LinearGradient(
-                    colors: [Color(0xFFF6C453), Color(0xFFFFD96A)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ).createShader(bounds),
-                  child: Text(
-                    lines[i].substring(0, 1),
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                      color: const Color(0xFFF6C453),
-                      fontFamily: 'Montserrat',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  lines[i].substring(1).trim(),
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: const Color(0xFFBFC3D9),
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    fontFamily: 'Montserrat',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: 12),
-        Text(
-          lines.length > 3 ? lines[3] : '',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: const Color(0xFFBFC3D9),
-            fontSize: 17,
-            fontWeight: FontWeight.w400,
-            fontFamily: 'Montserrat',
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _PremiumIcon extends StatelessWidget {
   final IconData icon;

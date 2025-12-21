@@ -2661,7 +2661,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           title: "Support the Journey 🌍",
                           emoji: "",
                           onTap: isLaunching
-                              ? () {}
+                              ? null
                               : () {
                                   setState(() => isLaunching = true);
                                   Navigator.of(context).pop();
@@ -2722,7 +2722,7 @@ class _SettingsPageState extends State<SettingsPage> {
     required BuildContext context,
     required String title,
     required String emoji,
-    required VoidCallback onTap,
+    required void Function()? onTap,
   }) {
     return Container(
       height: 64,
