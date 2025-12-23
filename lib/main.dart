@@ -2660,18 +2660,17 @@ class _SettingsPageState extends State<SettingsPage> {
                           context: context,
                           title: "Support the Journey 🌍",
                           emoji: "",
-                          onTap: isLaunching
-                              ? null
-                              : () {
-                                  setState(() => isLaunching = true);
-                                  Navigator.of(context).pop();
-                                  openExternalUrl(
-                                    context,
-                                    'https://ko-fi.com/mantramala',
-                                  ).whenComplete(
-                                    () => setState(() => isLaunching = false),
-                                  );
-                                },
+                          onTap: () {
+                            if (isLaunching) return;
+                            setState(() => isLaunching = true);
+                            Navigator.of(context).pop();
+                            openExternalUrl(
+                              context,
+                              'https://ko-fi.com/mantramala',
+                            ).whenComplete(
+                              () => setState(() => isLaunching = false),
+                            );
+                          },
                         );
                       },
                     ),

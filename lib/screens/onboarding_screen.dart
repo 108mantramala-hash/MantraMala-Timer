@@ -394,7 +394,7 @@ class _HowItWorksSteps extends StatelessWidget {
 class NumberedStepRow extends StatelessWidget {
   final int stepNumber;
   final String text;
-  const NumberedStepRow({required this.stepNumber, required this.text});
+  const NumberedStepRow({super.key, required this.stepNumber, required this.text});
 
   @override
   Widget build(BuildContext context) {
